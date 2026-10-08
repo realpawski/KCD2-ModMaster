@@ -6,6 +6,13 @@ import bpy
 from .bridge import is_connected
 from .metadata import get_active_asset_metadata
 
+_ICONS = set(bpy.types.UILayout.bl_rna.functions["operator"].parameters["icon"].enum_items.keys())
+
+
+def icon(name: str) -> str:
+    # Blender renames and removes icons between versions; an unknown one would abort the whole panel.
+    return name if name in _ICONS else "NONE"
+
 
 class KCD2_PT_modmaster_panel(bpy.types.Panel):
     """KCD2 ModMaster Sidebar Panel in 3D Viewport."""
@@ -26,14 +33,14 @@ class KCD2_PT_modmaster_panel(bpy.types.Panel):
         box_status = layout.box()
         row_conn = box_status.row(align=True)
         if connected:
-            row_conn.label(text="CONNECTED TO MODMASTER ✓", icon='CHECKMARK')
+            row_conn.label(text="CONNECTED TO MODMASTER ✓", icon=icon('CHECKMARK'))
         else:
-            row_conn.label(text="MODMASTER OFFLINE", icon='CANCEL')
-            row_conn.operator("kcd2.sync_modmaster", text="Retry", icon='FILE_REFRESH')
+            row_conn.label(text="MODMASTER OFFLINE", icon=icon('CANCEL'))
+            row_conn.operator("kcd2.sync_modmaster", text="Retry", icon=icon('FILE_REFRESH'))
 
         # Active Asset / Project info
         box_info = layout.box()
-        box_info.label(text="Bridge Context", icon='PRESET')
+        box_info.label(text="Bridge Context", icon=icon('PRESET'))
 
         proj = scene.get("modmaster_project") or (meta.get("project") if meta else "Default Project")
         col = box_info.column(align=True)
@@ -61,28 +68,28 @@ class KCD2_PT_modmaster_panel(bpy.types.Panel):
         col_actions = layout.column(align=True)
         col_actions.scale_y = 1.25
 
-        col_actions.operator("kcd2.import_from_modmaster", text="IMPORT MODEL", icon='IMPORT')
+        col_actions.operator("kcd2.import_from_modmaster", text="IMPORT MODEL", icon=icon('IMPORT'))
 
         layout.separator()
         box_mat = layout.box()
-        box_mat.label(text="Materials & Textures", icon='MATERIAL')
+        box_mat.label(text="Materials & Textures", icon=icon('MATERIAL'))
         col_mat = box_mat.column(align=True)
-        col_mat.operator("kcd2.sync_textures", text="SYNC TEXTURES", icon='IMAGE_DATA')
-        col_mat.operator("kcd2.build_materials", text="BUILD MATERIALS", icon='SHADING_RENDERED')
-        col_mat.operator("kcd2.rebuild_materials", text="REBUILD MATERIALS", icon='FILE_REFRESH')
+        col_mat.operator("kcd2.sync_textures", text="SYNC TEXTURES", icon=icon('IMAGE_DATA'))
+        col_mat.operator("kcd2.build_materials", text="BUILD MATERIALS", icon=icon('SHADING_RENDERED'))
+        col_mat.operator("kcd2.rebuild_materials", text="REBUILD MATERIALS", icon=icon('FILE_REFRESH'))
 
         layout.separator()
         col_exp = layout.column(align=True)
         col_exp.scale_y = 1.2
-        col_exp.operator("kcd2.export_cgf", text="EXPORT TO KCD2 (.CGF)", icon='EXPORT')
-        col_exp.operator("kcd2.export_to_workspace", text="EXPORT GLB PREVIEW", icon='FILE_3D')
-        col_exp.operator("kcd2.export_as_new_asset", text="EXPORT AS NEW ASSET", icon='DUPLICATE')
-        col_exp.operator("kcd2.open_workspace_folder", text="OPEN WORKSPACE FOLDER", icon='FILE_FOLDER')
+        col_exp.operator("kcd2.export_cgf", text="EXPORT TO KCD2 (.CGF)", icon=icon('EXPORT'))
+        col_exp.operator("kcd2.export_to_workspace", text="EXPORT GLB PREVIEW", icon=icon('FILE_3D'))
+        col_exp.operator("kcd2.export_as_new_asset", text="EXPORT AS NEW ASSET", icon=icon('DUPLICATE'))
+        col_exp.operator("kcd2.open_workspace_folder", text="OPEN WORKSPACE FOLDER", icon=icon('FILE_FOLDER'))
 
         layout.separator()
         col_sync = layout.column(align=True)
-        col_sync.operator("kcd2.sync_modmaster", text="CHECK CONNECTION", icon='LINKED')
-        col_sync.operator("kcd2.send_to_modmaster", text="REQUEST BUILD", icon='WRENCH')
+        col_sync.operator("kcd2.sync_modmaster", text="CHECK CONNECTION", icon=icon('LINKED'))
+        col_sync.operator("kcd2.send_to_modmaster", text="REQUEST BUILD", icon=icon('TOOL_SETTINGS'))
 
 
 def register() -> None:

@@ -11,6 +11,7 @@ import bpy
 from . import cry_compile
 from .bridge import send_message_to_modmaster
 from .metadata import get_active_asset_metadata
+from .panel import icon
 
 NEW_ASSET = "__new__"
 _asset_items: list[tuple[str, str, str]] = []
@@ -171,7 +172,7 @@ class KCD2_OT_export_cgf(bpy.types.Operator):
         if self.target == NEW_ASSET:
             layout.prop(self, "new_name")
         layout.prop(self, "selected_only")
-        layout.label(text="The model's origin is the world origin.", icon="INFO")
+        layout.label(text="The model's origin is the world origin.", icon=icon("INFO"))
 
     def execute(self, context):
         prefs = _prefs(context)
@@ -260,7 +261,7 @@ class KCD2_AddonPreferences(bpy.types.AddonPreferences):
         layout = self.layout
         layout.prop(self, "rc_path")
         found = cry_compile.find_rc(self.rc_path)
-        layout.label(text=str(found) if found else "rc.exe not found", icon="CHECKMARK" if found else "ERROR")
+        layout.label(text=str(found) if found else "rc.exe not found", icon=icon("CHECKMARK" if found else "ERROR"))
         layout.prop(self, "workspace_dir")
 
 
