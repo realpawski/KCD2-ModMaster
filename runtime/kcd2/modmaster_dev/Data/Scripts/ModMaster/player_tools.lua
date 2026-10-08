@@ -24,6 +24,7 @@ function ModMasterDev:ToggleGod()
     local p=self:PlayerEntity();local soul=p and p.soul
     if not soul or not soul.AddBuff or not soul.RemoveAllBuffsByGuid then return self:Log("RPG buff API unavailable") end
     if self.godOwner==p then
+        self:StopGodTick()
         if soul.RemoveBuff and self.godInstance then pcall(soul.RemoveBuff,soul,self.godInstance) end
         pcall(soul.RemoveAllBuffsByGuid,soul,ModMasterGodGuid)
         self.godOwner=nil;self.godInstance=nil
@@ -35,9 +36,41 @@ function ModMasterDev:ToggleGod()
         return self:Log("God Mode buff rejected; check buff database loading: " .. tostring(instance))
     end
     self.godOwner=p;self.godInstance=instance
-    if soul.SetState then pcall(soul.SetState,soul,"health",100) end
+    self:FillHealth(p)
     pcall(soul.AddBuff,soul,ModMasterRemoveInjuriesGuid)
-    self:Log("ModMaster God Mode active: invulnerable, full health, injuries cleared")
+    self:GodTick(p)
+    self:Log("ModMaster God Mode active: invulnerable, health kept full, injuries cleared")
+end
+
+ModMasterMaxHealth=100
+
+function ModMasterDev:FillHealth(p)
+    local soul=p and p.soul;if not soul then return false end
+    if soul.SetState and pcall(soul.SetState,soul,"health",ModMasterMaxHealth) then return true end
+    return soul.SetHealth~=nil and pcall(soul.SetHealth,soul,ModMasterMaxHealth)
+end
+
+-- The vanilla immortality buff stops death but not damage, so health is topped up while it is active.
+function ModMasterDev:GodTick(p)
+    if self.godOwner~=p then return end
+    local soul=p.soul
+    local okHp,hp=pcall(function() return soul.GetState and soul:GetState("health") end)
+    hp=okHp and tonumber(hp) or nil
+    if not hp or hp<ModMasterMaxHealth then self:FillHealth(p) end
+    if Script and Script.SetTimer then self.godTimer=Script.SetTimer(200,function() self:GodTick(p) end,nil,true) end
+end
+
+function ModMasterDev:StopGodTick()
+    if self.godTimer and Script.KillTimer then pcall(Script.KillTimer,self.godTimer) end
+    self.godTimer=nil
+end
+
+function ModMasterDev:RestoreHealth()
+    local p=self:PlayerEntity()
+    if not p or not p.soul then return self:Log("Player soul unavailable") end
+    if not self:FillHealth(p) then return self:Log("Health could not be set") end
+    if p.soul.AddBuff then pcall(p.soul.AddBuff,p.soul,ModMasterRemoveInjuriesGuid) end
+    self:Log("Health restored to maximum, injuries cleared")
 end
 
 -- Collider mode 5 turns collision off; the position is written directly every tick.
@@ -115,6 +148,7 @@ end
 function ModMasterDev:RestorePlayerOptions()
     if self.freecam then self:StopFreecam("Freecam restored") end
     if self.noclip then self:StopNoclip() end
+    self:StopGodTick()
     local p=self:PlayerEntity()
     if self.godOwner==p and p and p.soul then
         self:Guard(function()

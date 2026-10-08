@@ -1,10 +1,21 @@
+-- Retail registers the camera bindings as CryAction; reading an undefined global raises an error.
+function ModMasterDev:CameraApi()
+    for _,name in ipairs({"CryAction","Action"}) do
+        local api=rawget(_G,name)
+        if type(api)=="table" and type(api.SetViewCameraByAngles)=="function" and type(api.ResetToNormalCamera)=="function" then
+            return api
+        end
+    end
+end
+
 function ModMasterDev:ToggleFreecam()
     if self.noclip then return self:Log("Exit Noclip before enabling Freecam") end
     if self.freecam then return self:StopFreecam("Freecam disabled") end
-    if not Action or not Action.SetViewCameraByAngles or not Action.ResetToNormalCamera or
-        not System.GetViewCameraPos or not System.GetViewCameraAngles or not Script.SetTimer then
-        return self:Log("Freecam pose API unavailable")
+    local api=self:CameraApi()
+    if not api or not System.GetViewCameraPos or not System.GetViewCameraAngles or not Script.SetTimer then
+        return self:Log("Freecam camera API unavailable in this game version")
     end
+    self.cameraApi=api
     -- Native camera getters can raise and return non-number fields.
     local readOK,pos,angles=pcall(function() return System.GetViewCameraPos(),System.GetViewCameraAngles() end)
     if not readOK then return self:Log("Freecam getters rejected: " .. tostring(pos)) end
@@ -17,15 +28,15 @@ function ModMasterDev:ToggleFreecam()
     local c={pos={x=px,y=py,z=pz},pitch=pitch,yaw=yaw,lastTime=self:Now(),frames=0}
     self.freecam=c
     local ok,err=pcall(function() self:SetCameraPose(c) end)
-    if not ok then self.freecam=nil;pcall(Action.ResetToNormalCamera);return self:Log("Freecam pose rejected: " .. tostring(err)) end
+    if not ok then self.freecam=nil;pcall(self.cameraApi.ResetToNormalCamera);return self:Log("Freecam pose rejected: " .. tostring(err)) end
     self:Log("Freecam enabled: WASD move, Q/E vertical, Shift fast, Ctrl precise; arrows look when menu is closed")
     local tickOk,tickErr=pcall(function() self:FreecamTick(c) end)
-    if not tickOk then self.freecam=nil;pcall(Action.ResetToNormalCamera);self:Log("Freecam first tick failed; disabled: " .. tostring(tickErr)) end
+    if not tickOk then self.freecam=nil;pcall(self.cameraApi.ResetToNormalCamera);self:Log("Freecam first tick failed; disabled: " .. tostring(tickErr)) end
 end
 
 function ModMasterDev:SetCameraPose(c)
     -- Angles follow ed_goto degrees, while camera getters return radians.
-    return Action.SetViewCameraByAngles(c.pos.x,c.pos.y,c.pos.z,c.pitch*180/math.pi,0,c.yaw*180/math.pi)
+    return self.cameraApi.SetViewCameraByAngles(c.pos.x,c.pos.y,c.pos.z,c.pitch*180/math.pi,0,c.yaw*180/math.pi)
 end
 
 function ModMasterDev:CameraInputLock()
@@ -41,7 +52,7 @@ function ModMasterDev:StopFreecam(reason)
     self.cameraTimer=nil
     if self.cameraRules then pcall(function() self.cameraRules:FreezeInput(false) end);self.cameraRules=nil end
     pcall(ActionMapManager.EnableActionMapManager,true,true)
-    pcall(Action.ResetToNormalCamera)
+    pcall(self.cameraApi.ResetToNormalCamera)
     self:Guard(function() self:UI("Freecam",false) end)
     if self.opened then self:Guard(function() self:ApplyMenuInput() end) else pcall(UIAction.HideElement,"ModMasterMenu",0) end
     self:Log(reason or "Freecam restored")

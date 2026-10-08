@@ -4,6 +4,7 @@ class ModMasterMenu {
  var shown:Boolean;var openedAt:Number;var closeKeyPressed:Boolean;var actionQueue:Array;
  var view:Number;var active:String;var entries:Array;var assets:Array;var focus:Number;var total:Number;
  var candidateKey:String;var candidateNoclipKey:String;var modalOpen:Boolean;var modal:MovieClip;var searchField:TextField;var queries:Object;var queryKey:String;
+ var shiftHeld:Boolean;var ctrlHeld:Boolean;
  var cameraOnly:Boolean;var noclipHud:Boolean;var hotkey:String;var keyCode:Number;var hudEnabled:Boolean;var kind:String;
  var detail:String;var message:String;var god:String;var noclipStatus:String;var freecamStatus:String;var values:Array;var settingValues:Array;
  static function main(mc:MovieClip):Void {app=new ModMasterMenu(mc);}
@@ -24,16 +25,17 @@ class ModMasterMenu {
   mc["cry_onShow"]=function() {self.shown=true;self.cameraOnly=false;self.openedAt=getTimer();self.closeKeyPressed=false;mc["mmVisible"]=true;self.draw();};
   mc["cry_onHide"]=function() {self.shown=false;mc["mmVisible"]=false;};
   mc["cry_onBack"]=function() {self.back();};
-  var keyboard:Object={};keyboard.onKeyDown=function() {self.keyDown();};
-  keyboard.onKeyUp=function() {if(Key.getCode()==self.keyCode) {if(self.closeKeyPressed)self.emit(self.cameraOnly?"camera_menu":"close");self.closeKeyPressed=false;}};Key.addListener(keyboard);
+  var keyboard:Object={};keyboard.onKeyDown=function() {var k:Number=Key.getCode();if(k==16)self.shiftHeld=true;if(k==17)self.ctrlHeld=true;self.keyDown();};
+  keyboard.onKeyUp=function() {var k:Number=Key.getCode();if(k==16)self.shiftHeld=false;if(k==17)self.ctrlHeld=false;if(k==self.keyCode) {if(self.closeKeyPressed)self.emit(self.cameraOnly?"camera_menu":"close");self.closeKeyPressed=false;}};Key.addListener(keyboard);
   root.onEnterFrame=function() {
    // Arrows also navigate the list, so look keys only apply in the camera HUD.
+   // Modifier keys may not reach Scaleform, so R and F mirror Shift and Ctrl.
    var flyKeys:Boolean=!self.modalOpen;
    mc["camForward"]=flyKeys?(Key.isDown(87)?1:0)-(Key.isDown(83)?1:0):0;
    mc["camRight"]=flyKeys?(Key.isDown(68)?1:0)-(Key.isDown(65)?1:0):0;
    mc["camUp"]=flyKeys?(Key.isDown(69)?1:0)-(Key.isDown(81)?1:0):0;
-   mc["camFast"]=flyKeys && Key.isDown(16)?1:0;
-   mc["camSlow"]=flyKeys && Key.isDown(17)?1:0;
+   mc["camFast"]=flyKeys && (Key.isDown(16) || Key.isDown(82) || self.shiftHeld)?1:0;
+   mc["camSlow"]=flyKeys && (Key.isDown(17) || Key.isDown(70) || self.ctrlHeld)?1:0;
    mc["camPitch"]=self.cameraOnly?(Key.isDown(38)?1:0)-(Key.isDown(40)?1:0):0;
    mc["camYaw"]=self.cameraOnly?(Key.isDown(39)?1:0)-(Key.isDown(37)?1:0):0;
   if(self.actionQueue.length>0 && mc["mmAck"]==mc["mmSequence"]) {mc["mmAction"]=self.actionQueue.shift();mc["mmSequence"]++;}};
@@ -78,13 +80,14 @@ class ModMasterMenu {
    add("Close Menu","close","Return control to the game.",undefined);
   } else if(active=="PLAYER") {
    add("God Mode  ["+god.toUpperCase()+"]","god",
-    "Invulnerability through the game's own immortality buff. Stays active while the menu is closed and is never saved.\n\nStatus\n"+god.toUpperCase()+"\n\nBackend\nModMaster RPG Buff",
+    "Henry cannot die and his health is kept full. Stays active while the menu is closed and is never saved.\n\nStatus\n"+god.toUpperCase()+"\n\nBackend\nVanilla immortality buff + health refill",
     god=="ON"?"on":(god=="unavailable"?"unavailable":"off"));
+   add("Restore Health","heal","Fill health to maximum and clear injuries.",undefined);
    add("Freecam  ["+freecamStatus+"]","freecam",
-    "Detach the camera and fly freely. The player stays where they are. Works immediately -- the menu does not need to close first.\n\nControls\nWASD Move\nQ/E Vertical\nShift Fast\nCtrl Precision\nArrows Look (menu closed)\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nModMaster Freecam (direct camera transform)",
+    "Detach the camera and fly freely. The player stays where they are. Works immediately -- the menu does not need to close first.\n\nControls\nWASD Move\nQ/E Vertical\nShift or R  Fast\nCtrl or F  Precise\nArrows Look (menu closed)\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nModMaster Freecam (direct camera transform)",
     freecamStatus=="ON"?"on":"off");
    add("Noclip  ["+noclipStatus+"]","noclip",
-    "Henry moves freely through walls, doors, terrain, props and NPCs. Physics is disabled for the duration, so there is no collision left to stop him.\n\nControls\nWASD Move\nQ/E Vertical\nShift Fast\nCtrl Precision\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+noclipStatus+"\n\nBackend\nModMaster Noclip (direct position write, physics off)",
+    "Henry moves freely through walls, doors, terrain, props and NPCs. Physics is disabled for the duration, so there is no collision left to stop him.\n\nControls\nWASD Move\nQ/E Vertical\nShift or R  Fast\nCtrl or F  Precise\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+noclipStatus+"\n\nBackend\nModMaster Noclip (direct position write, physics off)",
     noclipStatus=="ON"?"on":"off");
    add("Restore Player Options","restore_player","Turn off God Mode / Freecam / Noclip and restore the values they changed.",undefined);
   } else if(active=="SETTINGS") {
@@ -124,13 +127,13 @@ class ModMasterMenu {
    if(!hudEnabled)return;
    box(34,48,350,58,0x17130F,88);box(34,48,350,3,0xBD9A5F,100);
    label((noclipHud?"MODMASTER NOCLIP":"MODMASTER FREECAM")+"   Speed "+(Math.round(settingValues[0]*100)/100),44,55,330,20,12,0xEDE3CC);
-   label("WASD move | Q/E vertical | Shift fast | Ctrl precise | "+hotkey.toUpperCase()+" menu | "+candidateNoclipKey.toUpperCase()+" noclip | Esc exit",44,76,330,26,10,0xA89C86);
+   label("WASD move | Q/E vertical | Shift/R fast | Ctrl/F precise | "+hotkey.toUpperCase()+" menu | "+candidateNoclipKey.toUpperCase()+" noclip | Esc exit",44,76,330,26,10,0xA89C86);
    return;
   }
   var start:Number=Math.floor(focus/9)*9;var count:Number=Math.min(9,entries.length-start);
   box(34,48,292,62,0xE4D6B8,100);
   label("KCD2 MODMASTER",46,59,266,28,21,0x241C12);
-  label("RUNTIME 0.5.1",48,87,266,16,10,0x6B5A3A);
+  label("RUNTIME 0.5.2",48,87,266,16,10,0x6B5A3A);
   box(34,110,292,3,0xBD9A5F,100);
   box(34,113,292,25,0x100D0A,94);
   var crumb:String=breadcrumb();

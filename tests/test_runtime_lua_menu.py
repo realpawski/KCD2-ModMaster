@@ -12,7 +12,7 @@ def runtime():
  System={LogAlways=function() end,ExecuteCommand=function() end,GetViewCameraDir=function() return {x=0,y=1,z=0} end,
   GetViewCameraPos=function() return {x=0,y=0,z=0} end,GetViewCameraAngles=function() return {x=0,y=0,z=0} end,
   GetCurrAsyncTime=function() return fakeTime end}
- Action={SetViewCameraByAngles=function(x,y,z,pitch,roll,yaw) lastPose={x=x,y=y,z=z,pitch=pitch,roll=roll,yaw=yaw};return true end,
+ CryAction={SetViewCameraByAngles=function(x,y,z,pitch,roll,yaw) lastPose={x=x,y=y,z=z,pitch=pitch,roll=roll,yaw=yaw};return true end,
   ResetToNormalCamera=function() cameraReset=true end}
  ActionMapManager={EnableActionMapManager=function(enable,reset) mapsEnabled=enable end}
  UIAction={GetVariable=function(el,id,name) return uiVars[name] end,SetVariable=function(el,id,name,value) uiVars[name]=value end,CallFunction=function(...) table.insert(calls,{...}) end,
@@ -36,6 +36,7 @@ def runtime():
   SetColliderMode=function(self,m) colliderMode=m end}
  g_gameRules={game={FreezeInput=function(self,v) frozen=v end}}
  Calendar={IsFakedTimeOfDay=function() return false end,SetFakeTimeOfDay=function(h) hour=h end,UnfakeTimeOfDay=function() hour=nil end}
+ setmetatable(_G,{__index=function(_,k) if k=="Action" then error("undefined global Action") end end})
  ''')
  for rel in ['ModMaster/core.lua','ModMaster/spawner.lua','ModMaster/player_tools.lua','ModMaster/camera.lua','ModMaster/features.lua','ModMaster/menu.lua']:
   lua.execute((SOURCE/rel).read_text(encoding='utf8'))
@@ -123,6 +124,23 @@ def test_god_mode_applies_without_has_buff_debug_and_refills_health():
  event(lua,'god')
  lua.execute('God2=select(1,ModMasterDev:PlayerOptions())')
  assert lua.eval('God2')=='OFF'
+
+def test_god_mode_keeps_health_full_until_disabled():
+ lua=runtime();open_menu(lua);event(lua,'god')
+ lua.execute('g_localActor.soul.health=12;timers[#timers]()')
+ assert lua.eval('g_localActor.soul.health')==100
+ event(lua,'god')
+ lua.execute('g_localActor.soul.health=12;ModMasterDev:GodTick(g_localActor)')
+ assert lua.eval('g_localActor.soul.health')==12
+
+def test_restore_health_fills_health_and_clears_injuries():
+ lua=runtime();open_menu(lua);lua.execute('g_localActor.soul.health=7');event(lua,'heal')
+ assert lua.eval('g_localActor.soul.health')==100
+ assert lua.eval('g_localActor.soul.buffs[ModMasterRemoveInjuriesGuid]')==True
+
+def test_freecam_reports_missing_camera_api_instead_of_raising():
+ lua=runtime();lua.execute('CryAction=nil');open_menu(lua);event(lua,'tab:PLAYER');event(lua,'freecam')
+ assert lua.eval('ModMasterDev.freecam==nil and ModMasterDev.opened')
 
 def test_god_mode_handles_add_buff_returning_nothing_or_erroring():
  lua=runtime();open_menu(lua)
