@@ -351,20 +351,51 @@ class RuntimeManager:
                 raise ValueError(f"{name} has no compiled model yet. In Blender, use Export to KCD2 (.cgf), "
                                  "or remove the asset from this mod.")
             for path, file in compiled_files(asset_dir).items():
-                extra[path] = file.read_bytes()
+                data = file.read_bytes()
+                extra[path] = self._fix_cdf(data) if path.lower().endswith(".cdf") else data
             if asset_id not in project.assets:
                 continue
             for model in models:
                 stem = Path(model).stem
-                entry = {"id": asset_id if len(models) == 1 else f"{asset_id}_{stem}",
+                suffix = Path(model).suffix.lower().lstrip(".")
+                entry = {"id": asset_id if len(models) == 1 else f"{asset_id}_{stem}_{suffix}",
                          "name": asset.name if asset else asset_id, "category": "props",
                          "spawn_type": "static_prop", "spawn_id": f"{project.id}:{asset_id}",
                          "model_path": model, "status": "packaged_unverified",
                          "lods": [], "physics": False, "source": "compiled_custom"}
                 if model.lower().endswith(".cdf"):
-                    entry["animation"] = self._idle_animation(cdf_skeleton(asset_dir / "compiled" / model))
+                    entry["animation"] = self._idle_animation(self._skeleton(cdf_skeleton(asset_dir / "compiled" / model)))
                 entries.append(entry)
         return entries, extra
+
+    def _skeleton(self, model: str) -> str:
+        from runtime_tools.animations import resolve_skeleton
+        if not model or model.lower().endswith(".chr"):
+            return model
+        if not hasattr(self, "_skeletons"):
+            self._skeletons = {}
+        if model not in self._skeletons:
+            try:
+                self._skeletons[model] = resolve_skeleton(self.game, model)
+            except OSError as exc:
+                log.warning("Skeleton for %s unavailable: %s", model, exc)
+                self._skeletons[model] = ""
+        return self._skeletons[model]
+
+    def _fix_cdf(self, data: bytes) -> bytes:
+        """A character definition must name a .chr skeleton; older exports wrote the .skin there."""
+        from xml.etree import ElementTree as ET
+        try:
+            root = ET.fromstring(data)
+        except ET.ParseError:
+            return data
+        model = root.find("Model")
+        current = model.get("File", "") if model is not None else ""
+        skeleton = self._skeleton(current)
+        if not skeleton or skeleton == current:
+            return data
+        model.set("File", skeleton)
+        return ET.tostring(root, encoding="utf-8")
 
     def _idle_animation(self, skeleton: str) -> str:
         from runtime_tools.animations import animation_names, default_animation

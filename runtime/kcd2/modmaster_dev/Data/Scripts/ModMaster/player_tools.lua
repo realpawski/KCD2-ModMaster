@@ -74,9 +74,26 @@ function ModMasterDev:RestoreHealth()
 end
 
 -- Noclip and Freecam fly Henry with collision off (collider mode 5). Game input stays on so the
--- mouse keeps steering the view; the movement actions are taken over through Player.OnAction.
-ModMasterFlyActions={moveforward="forward",moveback="back",moveleft="left",moveright="right",
-    jump="up",toggle_crouch="down",crouch="down",sprint="fast",toggle_run="precise"}
+-- mouse keeps steering the view. Vanilla movement never reaches Lua, so flying uses its own
+-- action map whose actions arrive in Player.OnAction.
+ModMasterFlightMap="modmaster_flight"
+ModMasterFlyActions={modmaster_fly_forward="forward",modmaster_fly_back="back",modmaster_fly_left="left",
+    modmaster_fly_right="right",modmaster_fly_up="up",modmaster_fly_down="down",modmaster_fly_fast="fast",
+    modmaster_fly_precise="precise",moveforward="forward",moveback="back",moveleft="left",moveright="right",
+    jump="up",toggle_crouch="down",crouch="down",sprint="fast"}
+
+function ModMasterDev:FlightMap(p,on)
+    local amm=rawget(_G,"ActionMapManager")
+    if type(amm)~="table" then return false end
+    if not self.flightMapLoaded and type(amm.LoadFromXML)=="function" then
+        local ok,err=pcall(amm.LoadFromXML,"Libs/Config/ModMasterActionMaps.xml")
+        self.flightMapLoaded=ok
+        if not ok then self:Log("Flight keys unavailable: " .. tostring(err)) end
+    end
+    if on and p and type(amm.SetActionListener)=="function" then pcall(amm.SetActionListener,ModMasterFlightMap,p.id) end
+    if type(amm.EnableActionMap)=="function" then pcall(amm.EnableActionMap,ModMasterFlightMap,on==true) end
+    return self.flightMapLoaded
+end
 
 function ModMasterDev:HookPlayerActions()
     if self.actionHookOriginal then return true end
@@ -128,6 +145,7 @@ function ModMasterDev:StartFlight(kind)
     if not started then self:Log(kind .. " start failed: " .. tostring(err));return false end
     self.noclip=f
     if not self:HookPlayerActions() then self:Log("Player actions unavailable; flying uses the menu keys only") end
+    self:FlightMap(p,true)
     if self.opened then self:CloseMenu(kind .. " started") else self:FlightHud(kind,true) end
     self:NoclipTick(f)
     return true
@@ -143,6 +161,7 @@ end
 
 function ModMasterDev:StopNoclip(quiet)
     local f=self.noclip;if not f then return end;self.noclip=nil;self.flyKeys={}
+    self:FlightMap(f.entity,false)
     if self.noclipTimer and Script.KillTimer then pcall(Script.KillTimer,self.noclipTimer) end;self.noclipTimer=nil
     if f.entity==self:PlayerEntity() then self:Guard(function() f.entity:SetColliderMode(ModMasterColliderNormal) end) end
     self:Guard(function() self:UI(f.kind,false) end)

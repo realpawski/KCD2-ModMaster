@@ -100,6 +100,8 @@ class ModMasterMenu {
    add("Fast Multiplier  < "+(Math.round(settingValues[1]*100)/100)+"x >","setting:1","Left / Right: adjust the Shift speed multiplier. Enter: apply.",undefined);
    add("Precision Multiplier  < "+(Math.round(settingValues[2]*100)/100)+"x >","setting:2","Left / Right: adjust the Ctrl speed multiplier. Enter: apply.",undefined);
   } else if(active=="WORLD") {
+   add("Photo Mode Range: Unlimited","photomode:unlimited","Lets the F1 photo mode camera travel as far as you like instead of staying in a small box around Henry. Current session.",undefined);
+   add("Photo Mode Range: Default","photomode:default","Restores the game's own photo mode range.",undefined);
    add("Morning","time:7","Preview 07:00 lighting.",undefined);add("Noon","time:12","Preview 12:00 lighting.",undefined);add("Sunset","time:19","Preview 19:00 lighting.",undefined);add("Night","time:0","Preview midnight lighting.",undefined);add("Restore Lighting","restore_world","Restore normal lighting.",undefined);
   } else if(view==1) {
    for(var i:Number=0;i<assets.length;i++)entries.push(assets[i]);
@@ -133,7 +135,7 @@ class ModMasterMenu {
   var start:Number=Math.floor(focus/9)*9;var count:Number=Math.min(9,entries.length-start);
   box(34,48,292,62,0xE4D6B8,100);
   label("KCD2 MODMASTER",46,59,266,28,21,0x241C12);
-  label("RUNTIME 0.5.4",48,87,266,16,10,0x6B5A3A);
+  label("RUNTIME 0.5.5",48,87,266,16,10,0x6B5A3A);
   box(34,110,292,3,0xBD9A5F,100);
   box(34,113,292,25,0x100D0A,94);
   var crumb:String=breadcrumb();

@@ -54,3 +54,25 @@ def default_animation(names: list[str]) -> str:
         if hits:
             return min(hits, key=len)
     return names[0] if names else ""
+
+
+def resolve_skeleton(game: Path, model: str, files: dict | None = None) -> str:
+    """The .chr skeleton for a model path; a .skin is looked up through the game's .cdf files."""
+    if model.lower().endswith(".chr") or not model:
+        return model
+    files = files if files is not None else _game_files(Path(game))
+    folder = model.lower().replace("\\", "/").rsplit("/", 1)[0] + "/"
+    target = model.lower().replace("\\", "/")
+    candidates = sorted(name for name in files if name.startswith(folder) and name.endswith(".cdf"))
+    for name in candidates:
+        try:
+            root = ET.fromstring(_read(files, name) or b"")
+        except ET.ParseError:
+            continue
+        bindings = [(a.get("Binding") or "").lower().replace("\\", "/") for a in root.iter("Attachment")]
+        model_node = root.find("Model")
+        if target in bindings and model_node is not None and model_node.get("File"):
+            return model_node.get("File")
+    chrs = sorted(name for name in files if name.startswith(folder) and name.endswith(".chr")
+                  and "skeleton" in name.rsplit("/", 1)[-1])
+    return files[chrs[0]][1] if chrs else ""

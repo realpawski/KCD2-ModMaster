@@ -10,6 +10,31 @@ function ModMasterDev:BindMenuKey(key)
     self:Log("Menu hotkey " .. key:upper() .. " (current session)")
 end
 
+ModMasterPhotoRangeCVar="wh_photomode_MaxDistance"
+
+-- F1 photo mode keeps its camera inside a small box around Henry; this widens that box.
+function ModMasterDev:PhotoModeRange(unlimited)
+    local get,set=System.GetCVar,System.SetCVar
+    local function read()
+        if type(get)~="function" then return nil end
+        local ok,value=pcall(get,ModMasterPhotoRangeCVar)
+        return ok and tonumber(value) or nil
+    end
+    if self.photoRangeDefault==nil then self.photoRangeDefault=read() end
+    local wanted=unlimited and 100000 or (self.photoRangeDefault or 0)
+    if wanted<=0 then return self:Log("Photo mode range: default unknown, nothing changed") end
+    if type(set)=="function" then pcall(set,ModMasterPhotoRangeCVar,wanted) end
+    if read()~=wanted and System.ExecuteCommand then
+        pcall(System.ExecuteCommand,ModMasterPhotoRangeCVar .. " " .. tostring(wanted))
+    end
+    local now=read()
+    if now==wanted then
+        self:Log("Photo mode range " .. (unlimited and "unlimited" or "back to default") .. " (" .. tostring(now) .. " m). Press F1.")
+    else
+        self:Log("The game did not accept the photo mode range (" .. tostring(now) .. ")")
+    end
+end
+
 -- Console binds bypass ActionMapManager, so they still fire while the menu has frozen input.
 function ModMasterDev:BindNoclipKey(key)
     if not MM_HOTKEYS[key] or not System.ExecuteCommand then return self:Log("Unsupported Noclip hotkey") end

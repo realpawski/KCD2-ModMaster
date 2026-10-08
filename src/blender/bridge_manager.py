@@ -608,7 +608,11 @@ class BlenderBridgeManager:
     def _skinned_parts(self, src: AssetRow) -> tuple[str, list[tuple[str, str]]]:
         """(skeleton path, [(skin path, material path)]) for a .cdf, .skin or .chr."""
         if src.ext.lower() != "cdf":
-            return src.vpath, [(src.vpath, "")]
+            skeleton = src.vpath
+            if src.ext.lower() == "skin" and self.settings.game_dir:
+                from runtime_tools.animations import resolve_skeleton
+                skeleton = resolve_skeleton(Path(self.settings.game_dir), src.vpath) or src.vpath
+            return skeleton, [(src.vpath, "")]
         from xml.etree import ElementTree as ET
         with PakArchive(src.archive_path) as pak:
             root = ET.fromstring(pak.read(src.vpath))

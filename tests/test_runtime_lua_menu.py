@@ -14,7 +14,9 @@ def runtime():
   GetCurrAsyncTime=function() return fakeTime end}
  CryAction={SetViewCameraByAngles=function(x,y,z,pitch,roll,yaw) lastPose={x=x,y=y,z=z,pitch=pitch,roll=roll,yaw=yaw};return true end,
   ResetToNormalCamera=function() cameraReset=true end}
- ActionMapManager={EnableActionMapManager=function(enable,reset) mapsEnabled=enable end}
+ flightMap={};ActionMapManager={EnableActionMapManager=function(enable,reset) mapsEnabled=enable end,
+  LoadFromXML=function(path) flightMap.loaded=path end,SetActionListener=function(map,id) flightMap.listener=id end,
+  EnableActionMap=function(map,on) flightMap[map]=on end}
  UIAction={GetVariable=function(el,id,name) return uiVars[name] end,SetVariable=function(el,id,name,value) uiVars[name]=value end,CallFunction=function(...) table.insert(calls,{...}) end,
   ShowElement=function() visible=true end,HideElement=function() visible=false end,
   RegisterElementListener=function() end,UnregisterElementListener=function() end}
@@ -82,27 +84,31 @@ def act(lua,action,activation='press'):
 def test_noclip_closes_menu_keeps_game_input_and_flies_with_game_actions():
  lua=runtime();open_menu(lua);event(lua,'tab:PLAYER');event(lua,'noclip')
  assert lua.eval('ModMasterDev.noclip~=nil and not ModMasterDev.opened and mapsEnabled and not frozen and visible')
- act(lua,'moveforward')
- assert lua.eval('#passedActions')==0  # movement is taken over, Henry does not walk
+ assert lua.eval('flightMap.loaded')=='Libs/Config/ModMasterActionMaps.xml'
+ assert lua.eval('flightMap.modmaster_flight==true and flightMap.listener==1')
+ act(lua,'modmaster_fly_forward')
+ assert lua.eval('#passedActions')==0
  lua.execute('fakeTime=0.1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
  assert abs(lua.eval('worldPos.y')-0.5)<1e-9  # base speed 5.0 * dt 0.1s
- act(lua,'toggle_run')
+ act(lua,'modmaster_fly_precise')
  lua.execute('fakeTime=0.2;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
  assert abs(lua.eval('worldPos.y')-0.625)<1e-9  # precise: 5*0.25*0.1
- act(lua,'toggle_run');act(lua,'sprint')
+ act(lua,'modmaster_fly_precise');act(lua,'modmaster_fly_fast')
  lua.execute('fakeTime=0.3;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
  assert abs(lua.eval('worldPos.y')-2.625)<1e-9  # fast: 5*4*0.1
- act(lua,'sprint','release');act(lua,'moveforward','release');act(lua,'jump')
+ act(lua,'modmaster_fly_fast','release');act(lua,'modmaster_fly_forward','release');act(lua,'modmaster_fly_up')
  lua.execute('fakeTime=0.4;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
  assert abs(lua.eval('worldPos.z')-0.5)<1e-9  # Space flies up
  act(lua,'rotateyaw')
  assert lua.eval('passedActions[1]')=='rotateyaw'  # mouse look still reaches the game
  assert lua.eval('colliderMode')==5
+ lua.execute('ModMasterDev:ToggleNoclip()')
+ assert lua.eval('flightMap.modmaster_flight==false')
 
 def test_freecam_flies_and_returns_henry_to_the_start():
  lua=runtime();open_menu(lua);event(lua,'tab:PLAYER');event(lua,'freecam')
  assert lua.eval('ModMasterDev.freecam~=nil and not ModMasterDev.opened and mapsEnabled')
- act(lua,'moveforward')
+ act(lua,'modmaster_fly_forward')
  lua.execute('fakeTime=0.1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
  assert abs(lua.eval('worldPos.y')-0.5)<1e-9
  lua.execute('ModMasterDev:ToggleFreecam()')
@@ -313,3 +319,14 @@ def test_rigged_models_spawn_as_animated_objects():
  assert lua.eval('spawned[1].properties.Animation.Animation')=='relaxed_idle_new'
  assert lua.eval('spawned[1].properties.Animation.bPlaying and spawned[1].properties.Animation.bLoop')
  assert lua.eval('spawned[2].class')=='BasicEntity'
+
+
+def test_photo_mode_range_is_widened_and_restored():
+ lua=runtime()
+ lua.execute('''cvars={wh_photomode_MaxDistance=20}
+  System.GetCVar=function(name) return cvars[name] end
+  System.SetCVar=function(name,value) cvars[name]=value end''')
+ open_menu(lua);event(lua,'photomode:unlimited')
+ assert lua.eval('cvars.wh_photomode_MaxDistance')==100000
+ event(lua,'photomode:default')
+ assert lua.eval('cvars.wh_photomode_MaxDistance')==20
