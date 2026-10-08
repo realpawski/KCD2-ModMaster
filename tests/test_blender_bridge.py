@@ -55,6 +55,14 @@ def test_ipc_ping_and_handshake(test_settings):
     """Tests localhost IPC communication on 127.0.0.1:24952."""
     import socket
 
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 24952))
+    except OSError:
+        pytest.skip("Port 24952 is taken by a running ModMaster")
+    finally:
+        probe.close()
+
     mgr = BlenderBridgeManager(test_settings)
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
