@@ -1,0 +1,10 @@
+{
+  "embedded_font_glyphs": 192,
+  "font_sha256": "3127f0b873387ee37e2040135a06e9e9c05030f509eb63689529becf28b50384",
+  "compiler": "MTASC 1.14",
+  "compiler_source": "https://github.com/fdorg/flashdevelop/tree/development/FlashDevelop/Bin/Debug/Tools/mtasc",
+  "compiler_sha256": "2ccfcdfaeb2bb844055157e84773bc955cbe8d56b56e57c56c6c3285a3ecdc21",
+  "source_sha256": "2e34e3beadc5b60b4e4190cd60a9a4bcc9730f64a6ad626657135b6d5d05a75f",
+  "swf_sha256": "86316a622ae0eea7e0419a3a3c1bf66686f145abc67916246a081a18e10f24d2",
+  "swf_version": 8
+}

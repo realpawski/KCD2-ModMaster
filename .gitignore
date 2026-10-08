@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.vscode/
+.idea/
+
+build/
+dist/
+
+# Local research and scratch data
+docs/
+scratch/
+cache_test_*/
+test_pipeline_scabbard/
+kcd_cheat_menu/
+runtime/kcd2/runtime_test/
+runtime/kcd2/modmaster_dev/game_catalog.json
+tools/runtime_cli.py
+tests/blender_material_acceptance.py
+/test_*.py
+rc_dependency.txt

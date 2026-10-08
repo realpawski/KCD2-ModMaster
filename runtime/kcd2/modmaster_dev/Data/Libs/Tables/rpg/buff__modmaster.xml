@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<database xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="barbora" xsi:noNamespaceSchemaLocation="../database.xsd">
+  <buffs version="1">
+    <buff buff_class_id="3" buff_exclusivity_id="1" buff_id="164dbdc7-3c21-4781-90e5-e65a3c252ecb" buff_lifetime_id="0" buff_name="modmaster_god_mode" buff_params="imm=1,hlh=0,slh=0" duration="-1" icon_id="0" implementation="Cpp:Constant" is_persistent="false" />
+  </buffs>
+</database>

@@ -1,0 +1,77 @@
+<UIElements name="ModMaster">
+  <UIElement name="ModMasterMenu" mouseevents="0" keyevents="1" cursor="0" controller_input="0" events_exclusive="0">
+    <GFx file="ModMasterMenu.swf" layer="60">
+      <Constraints>
+        <Align mode="fullscreen" scale="1" />
+      </Constraints>
+    </GFx>
+    <functions>
+      <function name="Reset" funcname="fc_reset">
+        <param name="Tab" type="string" />
+        <param name="Count" type="int" />
+        <param name="Selected" type="int" />
+        <param name="Total" type="int" />
+      </function>
+      <function name="Row" funcname="fc_row">
+        <param name="Index" type="int" />
+        <param name="Title" type="string" />
+        <param name="Subtitle" type="string" />
+        <param name="Selected" type="bool" />
+      </function>
+      <function name="Details" funcname="fc_details">
+        <param name="Text" type="string" />
+        <param name="X" type="string" />
+        <param name="Y" type="string" />
+        <param name="Z" type="string" />
+        <param name="RX" type="string" />
+        <param name="RY" type="string" />
+        <param name="RZ" type="string" />
+        <param name="Scale" type="string" />
+      </function>
+      <function name="Status" funcname="fc_status">
+        <param name="Text" type="string" />
+        <param name="Info" type="string" />
+      </function>
+      <function name="Player" funcname="fc_player">
+        <param name="God" type="string" />
+        <param name="Noclip" type="string" />
+        <param name="Freecam" type="string" />
+      </function>
+      <function name="Settings" funcname="fc_settings">
+        <param name="Key" type="string" />
+        <param name="Code" type="int" />
+        <param name="Hud" type="bool" />
+        <param name="Speed" type="string" />
+        <param name="Fast" type="string" />
+        <param name="Slow" type="string" />
+        <param name="NoclipKey" type="string" />
+      </function>
+      <function name="Freecam" funcname="fc_freecam">
+        <param name="Enabled" type="bool" />
+      </function>
+      <function name="Noclip" funcname="fc_noclip">
+        <param name="Enabled" type="bool" />
+      </function>
+    </functions>
+    <events>
+      <event name="Action" fscommand="modmasterAction">
+        <param name="Payload" type="string" />
+      </event>
+    </events>
+    <variables>
+      <variable name="Ready" varname="mmReady" />
+      <variable name="Sequence" varname="mmSequence" />
+      <variable name="Ack" varname="mmAck" />
+      <variable name="Action" varname="mmAction" />
+      <variable name="Visible" varname="mmVisible" />
+      <variable name="Font" varname="mmFont" />
+      <variable name="CamForward" varname="camForward" />
+      <variable name="CamRight" varname="camRight" />
+      <variable name="CamUp" varname="camUp" />
+      <variable name="CamPitch" varname="camPitch" />
+      <variable name="CamYaw" varname="camYaw" />
+      <variable name="CamFast" varname="camFast" />
+      <variable name="CamSlow" varname="camSlow" />
+    </variables>
+  </UIElement>
+</UIElements>
