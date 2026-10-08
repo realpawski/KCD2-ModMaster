@@ -35,6 +35,8 @@ def runtime():
   SetWorldPos=function(self,p) worldPos=p end,
   SetColliderMode=function(self,m) colliderMode=m end}
  g_gameRules={game={FreezeInput=function(self,v) frozen=v end}}
+ passedActions={}
+ Player={OnAction=function(self,action,activation,value) table.insert(passedActions,action) end}
  Calendar={IsFakedTimeOfDay=function() return false end,SetFakeTimeOfDay=function(h) hour=h end,UnfakeTimeOfDay=function() hour=nil end}
  setmetatable(_G,{__index=function(_,k) if k=="Action" then error("undefined global Action") end end})
  ''')
@@ -74,37 +76,47 @@ def test_world_change_releases_input():
  lua=runtime();open_menu(lua);lua.execute('g_localActor={id=2};ModMasterDev:WatchMenu(ModMasterDev.tickGeneration,1)')
  assert lua.eval('not frozen and not visible')
 
-def test_noclip_moves_while_menu_is_open_and_uses_deltatime():
- lua=runtime();open_menu(lua);event(lua,'tab:PLAYER');event(lua,'noclip')
- assert lua.eval('ModMasterDev.noclip~=nil and ModMasterDev.opened')
- lua.execute('fakeTime=0.1;uiVars.CamForward=1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
- assert lua.eval('ModMasterDev.opened')  # fix target: movement must not require closing the menu
- assert abs(lua.eval('worldPos.y')-0.5)<1e-9  # base speed 5.0 * dt 0.1s
- lua.execute('fakeTime=0.2;uiVars.CamSlow=1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
- assert abs(lua.eval('worldPos.y')-0.625)<1e-9  # +0.125 (speed 5*0.25 precision, dt 0.1s)
- lua.execute('fakeTime=0.3;uiVars.CamSlow=0;uiVars.CamFast=1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
- assert abs(lua.eval('worldPos.y')-2.625)<1e-9  # +2.0 (speed 5*4 fast, dt 0.1s)
- assert lua.eval('colliderMode')==5  # true noclip: native collider mode, not EnablePhysics(false)
+def act(lua,action,activation='press'):
+ lua.execute(f'Player.OnAction(g_localActor,"{action}","{activation}",1)')
 
-def test_freecam_moves_independent_of_player_and_menu():
+def test_noclip_closes_menu_keeps_game_input_and_flies_with_game_actions():
+ lua=runtime();open_menu(lua);event(lua,'tab:PLAYER');event(lua,'noclip')
+ assert lua.eval('ModMasterDev.noclip~=nil and not ModMasterDev.opened and mapsEnabled and not frozen and visible')
+ act(lua,'moveforward')
+ assert lua.eval('#passedActions')==0  # movement is taken over, Henry does not walk
+ lua.execute('fakeTime=0.1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
+ assert abs(lua.eval('worldPos.y')-0.5)<1e-9  # base speed 5.0 * dt 0.1s
+ act(lua,'toggle_run')
+ lua.execute('fakeTime=0.2;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
+ assert abs(lua.eval('worldPos.y')-0.625)<1e-9  # precise: 5*0.25*0.1
+ act(lua,'toggle_run');act(lua,'sprint')
+ lua.execute('fakeTime=0.3;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
+ assert abs(lua.eval('worldPos.y')-2.625)<1e-9  # fast: 5*4*0.1
+ act(lua,'sprint','release');act(lua,'moveforward','release');act(lua,'jump')
+ lua.execute('fakeTime=0.4;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
+ assert abs(lua.eval('worldPos.z')-0.5)<1e-9  # Space flies up
+ act(lua,'rotateyaw')
+ assert lua.eval('passedActions[1]')=='rotateyaw'  # mouse look still reaches the game
+ assert lua.eval('colliderMode')==5
+
+def test_freecam_flies_and_returns_henry_to_the_start():
  lua=runtime();open_menu(lua);event(lua,'tab:PLAYER');event(lua,'freecam')
- assert lua.eval('ModMasterDev.freecam~=nil and ModMasterDev.opened')
- lua.execute('fakeTime=0.1;uiVars.CamForward=1;ModMasterDev:FreecamTick(ModMasterDev.freecam)')
- assert lua.eval('ModMasterDev.opened')
- assert abs(lua.eval('lastPose.y')-0.5)<1e-9  # camera moved: base speed 5.0 * dt 0.1s
- assert lua.eval('worldPos.x==0 and worldPos.y==0 and worldPos.z==0')  # player never moved
- event(lua,'freecam')
- assert lua.eval('ModMasterDev.freecam==nil')
+ assert lua.eval('ModMasterDev.freecam~=nil and not ModMasterDev.opened and mapsEnabled')
+ act(lua,'moveforward')
+ lua.execute('fakeTime=0.1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
+ assert abs(lua.eval('worldPos.y')-0.5)<1e-9
+ lua.execute('ModMasterDev:ToggleFreecam()')
+ assert lua.eval('ModMasterDev.freecam==nil and ModMasterDev.noclip==nil')
+ assert lua.eval('worldPos.x==0 and worldPos.y==0 and worldPos.z==0 and colliderMode==0')
 
 def test_freecam_and_noclip_are_mutually_exclusive():
- lua=runtime();open_menu(lua);event(lua,'tab:PLAYER');event(lua,'freecam')
+ lua=runtime();lua.execute('ModMasterDev:ToggleNoclip()')
+ lua.execute('ModMasterDev:ToggleFreecam()')
+ assert lua.eval('ModMasterDev.freecam==nil and ModMasterDev.noclip~=nil')  # refused while Noclip runs
+ lua.execute('ModMasterDev:ToggleNoclip();ModMasterDev:ToggleFreecam()')
  assert lua.eval('ModMasterDev.freecam~=nil')
- event(lua,'noclip')
- assert lua.eval('ModMasterDev.noclip==nil')  # refused while Freecam is active
- event(lua,'freecam');event(lua,'noclip')
- assert lua.eval('ModMasterDev.noclip~=nil')
- event(lua,'freecam')
- assert lua.eval('ModMasterDev.freecam==nil')  # refused while Noclip is active
+ lua.execute('ModMasterDev:ToggleNoclip()')  # F4 ends Freecam
+ assert lua.eval('ModMasterDev.freecam==nil and ModMasterDev.noclip==nil')
 
 def test_noclip_hotkey_binds_independent_of_menu_and_rejects_collision():
  lua=runtime()
@@ -138,9 +150,11 @@ def test_restore_health_fills_health_and_clears_injuries():
  assert lua.eval('g_localActor.soul.health')==100
  assert lua.eval('g_localActor.soul.buffs[ModMasterRemoveInjuriesGuid]')==True
 
-def test_freecam_reports_missing_camera_api_instead_of_raising():
- lua=runtime();lua.execute('CryAction=nil');open_menu(lua);event(lua,'tab:PLAYER');event(lua,'freecam')
- assert lua.eval('ModMasterDev.freecam==nil and ModMasterDev.opened')
+def test_hotkey_noclip_shows_hud_and_hides_it_again():
+ lua=runtime();lua.execute('ModMasterDev:ToggleNoclip()')
+ assert lua.eval('visible and mapsEnabled and not frozen')
+ lua.execute('ModMasterDev:ToggleNoclip()')
+ assert lua.eval('not visible and colliderMode==0')
 
 def test_god_mode_handles_add_buff_returning_nothing_or_erroring():
  lua=runtime();open_menu(lua)

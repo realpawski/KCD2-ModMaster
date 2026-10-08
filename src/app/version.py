@@ -1,6 +1,6 @@
 APP_NAME = "KCD2 ModMaster"
 APP_ID = "PAWSKI.KCD2ModMaster"
-VERSION = "0.9.2"
+VERSION = "0.9.3"
 CHANNEL = "beta"
 PUBLISHER = "PAWSKI"
 HOMEPAGE = "https://realpawski.de/releases/"

@@ -1,4 +1,4 @@
-ModMasterDev = {version="0.5.2", registryVersion=1, opened=false, assets={},
+ModMasterDev = {version="0.5.3", registryVersion=1, opened=false, assets={},
     spawns={}, selected=1, spawnSelected=1, tab="ASSETS", search="", category="", modFilter="",
     serial=0, timer=nil, message="Runtime loaded; in-game acceptance pending", locations={},
     settings={hotkey="f5",keyCode=116,noclipHotkey="f4",hudEnabled=true,freecamSpeed=5.0,fastMult=4.0,slowMult=0.25}}
@@ -139,7 +139,7 @@ function ModMasterDev:Init()
     self:Command("mm_restore_world", "ModMasterDev:RestoreWorld()", "Restore this companion's time preview override")
     self:Command("mm_release_input", "ModMasterDev:CloseMenu()", "Emergency close and restore gameplay input")
     self:Command("mm_god", "ModMasterDev:Guard(function() ModMasterDev:ToggleGod() end)", "Toggle ModMaster God Mode (RPG buff)")
-    self:Command("mm_freecam", "ModMasterDev:Guard(function() ModMasterDev:ToggleFreecam() end)", "Toggle ModMaster Freecam (camera detaches, player stays)")
+    self:Command("mm_freecam", "ModMasterDev:Guard(function() ModMasterDev:ToggleFreecam() end)", "Toggle ModMaster Freecam (fly, then return to the start position)")
     self:Command("mm_noclip", "ModMasterDev:Guard(function() ModMasterDev:ToggleNoclip() end)", "Toggle ModMaster Noclip (player moves through collision)")
     self:Command("mm_give", "ModMasterDev:Guard(function() ModMasterDev:GiveSelectedItem() end)", "Add selected game item to player inventory")
     self:Command("mm_equip", "ModMasterDev:Guard(function() ModMasterDev:EquipSelectedItem() end)", "Equip selected game item in player hands")

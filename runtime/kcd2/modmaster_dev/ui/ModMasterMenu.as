@@ -29,13 +29,13 @@ class ModMasterMenu {
   keyboard.onKeyUp=function() {var k:Number=Key.getCode();if(k==16)self.shiftHeld=false;if(k==17)self.ctrlHeld=false;if(k==self.keyCode) {if(self.closeKeyPressed)self.emit(self.cameraOnly?"camera_menu":"close");self.closeKeyPressed=false;}};Key.addListener(keyboard);
   root.onEnterFrame=function() {
    // Arrows also navigate the list, so look keys only apply in the camera HUD.
-   // Modifier keys may not reach Scaleform, so R and F mirror Shift and Ctrl.
+   // Game input stays on while flying; these readings are a fallback for the Lua action hook.
    var flyKeys:Boolean=!self.modalOpen;
    mc["camForward"]=flyKeys?(Key.isDown(87)?1:0)-(Key.isDown(83)?1:0):0;
    mc["camRight"]=flyKeys?(Key.isDown(68)?1:0)-(Key.isDown(65)?1:0):0;
-   mc["camUp"]=flyKeys?(Key.isDown(69)?1:0)-(Key.isDown(81)?1:0):0;
-   mc["camFast"]=flyKeys && (Key.isDown(16) || Key.isDown(82) || self.shiftHeld)?1:0;
-   mc["camSlow"]=flyKeys && (Key.isDown(17) || Key.isDown(70) || self.ctrlHeld)?1:0;
+   mc["camUp"]=flyKeys?(Key.isDown(32)?1:0)-(Key.isDown(67)?1:0):0;
+   mc["camFast"]=flyKeys && (Key.isDown(16) || self.shiftHeld)?1:0;
+   mc["camSlow"]=flyKeys && (Key.isDown(17) || self.ctrlHeld)?1:0;
    mc["camPitch"]=self.cameraOnly?(Key.isDown(38)?1:0)-(Key.isDown(40)?1:0):0;
    mc["camYaw"]=self.cameraOnly?(Key.isDown(39)?1:0)-(Key.isDown(37)?1:0):0;
   if(self.actionQueue.length>0 && mc["mmAck"]==mc["mmSequence"]) {mc["mmAction"]=self.actionQueue.shift();mc["mmSequence"]++;}};
@@ -84,10 +84,10 @@ class ModMasterMenu {
     god=="ON"?"on":(god=="unavailable"?"unavailable":"off"));
    add("Restore Health","heal","Fill health to maximum and clear injuries.",undefined);
    add("Freecam  ["+freecamStatus+"]","freecam",
-    "Detach the camera and fly freely. The player stays where they are. Works immediately -- the menu does not need to close first.\n\nControls\nWASD Move\nQ/E Vertical\nShift or R  Fast\nCtrl or F  Precise\nArrows Look (menu closed)\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nModMaster Freecam (direct camera transform)",
+    "Fly freely through walls and terrain while the mouse steers the view. When Freecam ends, Henry is back where he started.\n\nControls\nWASD  Fly\nSpace / C  Up / Down\nShift  Fast\nCaps Lock  Precise on/off\nF4  Stop\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nCollision off, position restored on exit",
     freecamStatus=="ON"?"on":"off");
    add("Noclip  ["+noclipStatus+"]","noclip",
-    "Henry moves freely through walls, doors, terrain, props and NPCs. Physics is disabled for the duration, so there is no collision left to stop him.\n\nControls\nWASD Move\nQ/E Vertical\nShift or R  Fast\nCtrl or F  Precise\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+noclipStatus+"\n\nBackend\nModMaster Noclip (direct position write, physics off)",
+    "Henry flies through walls, doors, terrain, props and NPCs while the mouse steers the view. He stays where Noclip ends.\n\nControls\nWASD  Fly\nSpace / C  Up / Down\nShift  Fast\nCaps Lock  Precise on/off\nF4  Stop\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+noclipStatus+"\n\nBackend\nModMaster Noclip (direct position write, physics off)",
     noclipStatus=="ON"?"on":"off");
    add("Restore Player Options","restore_player","Turn off God Mode / Freecam / Noclip and restore the values they changed.",undefined);
   } else if(active=="SETTINGS") {
@@ -127,13 +127,13 @@ class ModMasterMenu {
    if(!hudEnabled)return;
    box(34,48,350,58,0x17130F,88);box(34,48,350,3,0xBD9A5F,100);
    label((noclipHud?"MODMASTER NOCLIP":"MODMASTER FREECAM")+"   Speed "+(Math.round(settingValues[0]*100)/100),44,55,330,20,12,0xEDE3CC);
-   label("WASD move | Q/E vertical | Shift/R fast | Ctrl/F precise | "+hotkey.toUpperCase()+" menu | "+candidateNoclipKey.toUpperCase()+" noclip | Esc exit",44,76,330,26,10,0xA89C86);
+   label("WASD fly | Space/C up/down | Shift fast | Caps Lock precise | "+candidateNoclipKey.toUpperCase()+" stop | "+hotkey.toUpperCase()+" menu",44,76,330,26,10,0xA89C86);
    return;
   }
   var start:Number=Math.floor(focus/9)*9;var count:Number=Math.min(9,entries.length-start);
   box(34,48,292,62,0xE4D6B8,100);
   label("KCD2 MODMASTER",46,59,266,28,21,0x241C12);
-  label("RUNTIME 0.5.2",48,87,266,16,10,0x6B5A3A);
+  label("RUNTIME 0.5.3",48,87,266,16,10,0x6B5A3A);
   box(34,110,292,3,0xBD9A5F,100);
   box(34,113,292,25,0x100D0A,94);
   var crumb:String=breadcrumb();
@@ -182,12 +182,12 @@ class ModMasterMenu {
  function keyDown():Void {
   var code:Number=Key.getCode();
   if(modalOpen) {
-   if(code==13) {var query:String=searchField.text;queries[queryKey]=query;closeSearch();focus=0;if((active=="ASSETS" || active=="SPAWNS") && view>0)emit("search:"+escape(query));draw();}
+   if(code==13) {var query:String=searchField.text;closeSearch();focus=0;if(view==0 && query.length>0) {queries["HOME"]="";queryKey="all";queries["all"]=query;active="ASSETS";view=1;assets=[];detail="";emit("filter;"+escape(query)+";;");emit("tab:ASSETS");draw();return;}queries[queryKey]=query;if((active=="ASSETS" || active=="SPAWNS") && view>0)emit("search:"+escape(query));draw();}
    else if(code==27)closeSearch();
    else if(code==65 && Key.isDown(17))Selection.setSelection(0,searchField.text.length);
    return;
   }
-  if(cameraOnly) {if(code==27)emit("camera_exit");else if(code==keyCode && getTimer()-openedAt>=500)closeKeyPressed=true;return;}
+  if(cameraOnly) {if(code==keyCode && getTimer()-openedAt>=500)closeKeyPressed=true;return;}
   if(!shown)return;
   if(code==keyCode) {if(getTimer()-openedAt>=500)closeKeyPressed=true;return;}
   if(code==27 || code==8 || code==46) {back();return;}

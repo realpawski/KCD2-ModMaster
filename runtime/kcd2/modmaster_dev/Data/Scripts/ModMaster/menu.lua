@@ -25,9 +25,8 @@ function ModMasterDev:CloseMenu(reason)
     -- Release input even when HideElement fails or recursively fires Hidden.
     self:ReleaseMenuInput()
     if self.noclip then
-        self:Guard(function() self:CameraInputLock();self:UI("Noclip",true) end)
-    elseif self.freecam then
-        self:Guard(function() self:CameraInputLock();self:UI("Freecam",true) end)
+        local kind=self.noclip.kind
+        self:Guard(function() self:UI(kind,true) end)
     elseif UIAction and UIAction.HideElement and not self.hiding then
         self.hiding=true;pcall(UIAction.HideElement,"ModMasterMenu",0);self.hiding=false
     end

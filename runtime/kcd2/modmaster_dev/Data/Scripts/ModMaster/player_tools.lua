@@ -73,30 +73,81 @@ function ModMasterDev:RestoreHealth()
     self:Log("Health restored to maximum, injuries cleared")
 end
 
--- Collider mode 5 turns collision off; the position is written directly every tick.
-function ModMasterDev:ToggleNoclip()
-    if self.freecam then return self:Log("Exit Freecam before enabling Noclip") end
-    if self.noclip then self:StopNoclip();return end
-    local p=self:PlayerEntity()
-    if not p or not p.SetWorldPos or not p.GetWorldPos or not p.SetColliderMode then
-        return self:Log("Player transform API unavailable")
+-- Noclip and Freecam fly Henry with collision off (collider mode 5). Game input stays on so the
+-- mouse keeps steering the view; the movement actions are taken over through Player.OnAction.
+ModMasterFlyActions={moveforward="forward",moveback="back",moveleft="left",moveright="right",
+    jump="up",toggle_crouch="down",crouch="down",sprint="fast",toggle_run="precise"}
+
+function ModMasterDev:HookPlayerActions()
+    if self.actionHookOriginal then return true end
+    local cls=rawget(_G,"Player")
+    if type(cls)~="table" or type(cls.OnAction)~="function" then return false end
+    local original=cls.OnAction
+    self.actionHookOriginal=original
+    cls.OnAction=function(entity,action,activation,value)
+        local dev=ModMasterDev
+        if dev.noclip and not dev.opened and dev:FlightAction(action,activation) then return end
+        return original(entity,action,activation,value)
     end
-    self.noclip={entity=p,lastTime=self:Now()}
-    local started,startErr=pcall(function() p:SetColliderMode(ModMasterColliderNoclip) end)
-    if not started then self.noclip=nil;return self:Log("Noclip start failed: " .. tostring(startErr)) end
-    self:Log("Noclip active: collision disabled, WASD/QE/Shift/Ctrl move Henry directly")
-    self:NoclipTick(self.noclip)
+    return true
 end
 
-function ModMasterDev:StopNoclip()
-    local f=self.noclip;if not f then return end;self.noclip=nil
+function ModMasterDev:FlightAction(action,activation)
+    local role=ModMasterFlyActions[action]
+    if not role then return false end
+    local keys=self.flyKeys
+    if role=="precise" then
+        if activation=="press" then keys.precise=not keys.precise end
+    else
+        keys[role]=activation~="release"
+    end
+    return true
+end
+
+function ModMasterDev:FlightHud(kind,on)
+    if not UIAction then return end
+    if on and not self.opened and UIAction.ShowElement then
+        pcall(UIAction.ShowElement,"ModMasterMenu",0)
+        if Script and Script.SetTimer then
+            Script.SetTimer(150,function() if self.noclip then self:Guard(function() self:UI(kind,true) end) end end)
+        end
+        return
+    end
+    self:Guard(function() self:UI(kind,on) end)
+end
+
+function ModMasterDev:StartFlight(kind)
+    local p=self:PlayerEntity()
+    if not p or not p.SetWorldPos or not p.GetWorldPos or not p.SetColliderMode then
+        self:Log("Player transform API unavailable");return false
+    end
+    self.flyKeys={}
+    local f={entity=p,kind=kind,lastTime=self:Now()}
+    local pos=p:GetWorldPos();f.pos={x=pos.x,y=pos.y,z=pos.z}
+    local started,err=pcall(function() p:SetColliderMode(ModMasterColliderNoclip) end)
+    if not started then self:Log(kind .. " start failed: " .. tostring(err));return false end
+    self.noclip=f
+    if not self:HookPlayerActions() then self:Log("Player actions unavailable; flying uses the menu keys only") end
+    if self.opened then self:CloseMenu(kind .. " started") else self:FlightHud(kind,true) end
+    self:NoclipTick(f)
+    return true
+end
+
+function ModMasterDev:ToggleNoclip()
+    if self.freecam then return self:StopFreecam("Freecam disabled") end
+    if self.noclip then self:StopNoclip();return end
+    if self:StartFlight("Noclip") then
+        self:Log("Noclip active: WASD fly, Space/C up/down, Shift fast, Caps Lock precise")
+    end
+end
+
+function ModMasterDev:StopNoclip(quiet)
+    local f=self.noclip;if not f then return end;self.noclip=nil;self.flyKeys={}
     if self.noclipTimer and Script.KillTimer then pcall(Script.KillTimer,self.noclipTimer) end;self.noclipTimer=nil
     if f.entity==self:PlayerEntity() then self:Guard(function() f.entity:SetColliderMode(ModMasterColliderNormal) end) end
-    if self.cameraRules then pcall(function() self.cameraRules:FreezeInput(false) end);self.cameraRules=nil end
-    pcall(ActionMapManager.EnableActionMapManager,true,true)
-    self:Guard(function() self:UI("Noclip",false) end)
+    self:Guard(function() self:UI(f.kind,false) end)
     if self.opened then self:Guard(function() self:ApplyMenuInput() end) else pcall(UIAction.HideElement,"ModMasterMenu",0) end
-    self:Log("Noclip disabled; normal collision restored")
+    if not quiet then self:Log("Noclip disabled; normal collision restored") end
 end
 
 -- Uses the camera's up vector so steep pitch still moves along the view.
@@ -110,6 +161,16 @@ local function mmCross(a,b)
     return {x=a.y*b.z-a.z*b.y, y=a.z*b.x-a.x*b.z, z=a.x*b.y-a.y*b.x}
 end
 
+function ModMasterDev:FlightInput()
+    local k=self.flyKeys or {}
+    local function ui(name) return math.max(-1,math.min(1,tonumber(UIAction.GetVariable("ModMasterMenu",0,name)) or 0)) end
+    local function pick(hook,menu) return math.abs(menu)>math.abs(hook) and menu or hook end
+    local fwd=pick((k.forward and 1 or 0)-(k.back and 1 or 0),ui("CamForward"))
+    local side=pick((k.right and 1 or 0)-(k.left and 1 or 0),ui("CamRight"))
+    local up=pick((k.up and 1 or 0)-(k.down and 1 or 0),ui("CamUp"))
+    return fwd,side,up,k.fast or ui("CamFast")>0,k.precise or ui("CamSlow")>0
+end
+
 function ModMasterDev:NoclipTick(f)
     if self.noclip~=f then return end
     if f.entity~=self:PlayerEntity() then return self:StopNoclip() end
@@ -119,12 +180,13 @@ function ModMasterDev:NoclipTick(f)
             local seq=tonumber(UIAction.GetVariable("ModMasterMenu",0,"Sequence"))
             if seq and seq~=self.uiSequence then
                 local action=UIAction.GetVariable("ModMasterMenu",0,"Action");self.uiSequence=seq;UIAction.SetVariable("ModMasterMenu",0,"Ack",seq)
-                if action=="camera_exit" then self:StopNoclip();return elseif action=="camera_menu" then self:Toggle();return end
+                if action=="camera_exit" then
+                    if self.freecam then self:StopFreecam() else self:StopNoclip() end
+                    return
+                elseif action=="camera_menu" then self:Toggle();return end
             end
         end
-        -- The menu SWF samples movement keys every frame, open or closed.
         local now=self:Now();local dt=math.max(0,math.min(0.1,now-(f.lastTime or now)));f.lastTime=now
-        local function axis(name) return math.max(-1,math.min(1,tonumber(UIAction.GetVariable("ModMasterMenu",0,name)) or 0)) end
         local forward=mmNormalize(System.GetViewCameraDir())
         local camUp={x=0,y=0,z=1}
         if System.GetViewCameraUpDir then
@@ -132,17 +194,20 @@ function ModMasterDev:NoclipTick(f)
             if okUp and type(up)=="table" then camUp=mmNormalize(up) end
         end
         local right=mmNormalize(mmCross(forward,camUp))
-        local fast=axis("CamFast")>0;local slow=axis("CamSlow")>0
+        local fwdIn,sideIn,upIn,fast,slow=self:FlightInput()
         local speed=self.settings.freecamSpeed*(fast and self.settings.fastMult or (slow and self.settings.slowMult or 1))
-        local fwdIn=axis("CamForward");local sideIn=axis("CamRight");local upIn=axis("CamUp")
-        local pos=f.entity:GetWorldPos()
+        -- The stored position wins over any walking the game applied since the last tick.
+        local pos=f.pos
         pos.x=pos.x+(forward.x*fwdIn+right.x*sideIn)*speed*dt
         pos.y=pos.y+(forward.y*fwdIn+right.y*sideIn)*speed*dt
         pos.z=pos.z+(forward.z*fwdIn+upIn)*speed*dt
-        f.entity:SetWorldPos(pos)
+        f.entity:SetWorldPos({x=pos.x,y=pos.y,z=pos.z})
     end)
-    if not ok then self:StopNoclip();self:Log("Noclip error; restored: " .. tostring(err));return end
-    if self.noclip==f then self.noclipTimer=Script.SetTimer(33,function() self:NoclipTick(f) end,nil,true) end
+    if not ok then
+        if self.freecam then self.freecam=nil end
+        self:StopNoclip();self:Log("Flight error; restored: " .. tostring(err));return
+    end
+    if self.noclip==f then self.noclipTimer=Script.SetTimer(16,function() self:NoclipTick(f) end,nil,true) end
 end
 
 function ModMasterDev:RestorePlayerOptions()
