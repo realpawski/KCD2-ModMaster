@@ -25,6 +25,7 @@ from typing import Any, Callable
 
 from PySide6.QtCore import QObject, Signal
 
+from app.paths import is_frozen
 from archives.pak import PakArchive
 from core.config import Settings
 from core.tasks import UserFacingError
@@ -41,7 +42,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_IPC_HOST = "127.0.0.1"
 DEFAULT_IPC_PORT = 24952
-CURRENT_BRIDGE_VERSION = "1.0.0"
+CURRENT_BRIDGE_VERSION = "1.1.0"
 ADDON_NAME = "KCD2_ModMaster_Bridge"
 
 
@@ -209,13 +210,15 @@ class BlenderBridgeManager:
                     else:
                         shutil.rmtree(dst, ignore_errors=True)
 
-                # Try creating directory symlink/junction first
+                # A source checkout links the add-on for live edits; the installed app copies it,
+                # because a link into the program folder breaks once ModMaster is uninstalled.
                 try:
+                    if is_frozen():
+                        raise OSError("copy")
                     os.symlink(str(src), str(dst), target_is_directory=True)
                     log.info("Linked bridge addon via symlink to %s", dst)
                 except (OSError, NotImplementedError):
-                    # Fallback to copy
-                    shutil.copytree(src, dst)
+                    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__"))
                     log.info("Copied bridge addon to %s", dst)
 
                 installed_paths.append(str(dst))
@@ -386,6 +389,14 @@ class BlenderBridgeManager:
             self.signals.asset_exported.emit(asset_id, asset_name, export_file)
             self.signals.log_message.emit(f"Asset '{asset_name}' exported from Blender to workspace.")
             resp = {"status": "ok", "message": "Export acknowledged"}
+
+        elif cmd == "asset_compiled":
+            asset_id = msg.get("asset_id", "")
+            model = msg.get("model", "")
+            log.info("Asset compiled in Blender: %s (%s)", asset_id, model)
+            self.signals.asset_exported.emit(asset_id, asset_id, model)
+            self.signals.log_message.emit(f"'{asset_id}' compiled to {model}. Add it to a mod and build.")
+            resp = {"status": "ok"}
 
         elif cmd == "request_build":
             self.signals.log_message.emit(f"Build requested for asset {msg.get('asset_id')}")

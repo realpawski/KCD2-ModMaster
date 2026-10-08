@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from compiler import compiled_models as models_in, item_model_path
 from items.fields import CREATABLE_TYPES, field_info, headline_stats, type_label
 from items.gamedata import ItemCatalog, VanillaItem
 from items.models import MODE_NEW, MODE_OVERRIDE, GameItemDefinition, new_item_from_base
@@ -35,15 +36,20 @@ TYPE_ICONS = {
 }
 
 
-def compiled_models(workspace: Path) -> list[tuple[str, str, Path]]:
-    """Workspace assets that contain a compiled CGF: (asset_id, name, cgf)."""
+def compiled_models(workspace: Path) -> list[tuple[str, str, str]]:
+    """Workspace assets with a compiled model: (asset_id, label, Model attribute or bare .cgf name)."""
     result = []
     for asset in list_workspace_assets(workspace):
         folder = Path(asset.workspace_dir)
+        models = models_in(folder)
+        for game_path in models:
+            result.append((asset.asset_id, f"{asset.name}  ({Path(game_path).name})", item_model_path(game_path)))
+        if models:
+            continue
         for sub in ("source", "export", ""):
             hits = [p for p in (folder / sub).glob("*.cgf") if p.read_bytes()[:4] == b"CrCh"]
             if hits:
-                result.append((asset.asset_id, asset.name, hits[0]))
+                result.append((asset.asset_id, f"{asset.name}  ({hits[0].name})", hits[0].name))
                 break
     return result
 
@@ -127,8 +133,8 @@ class NewItemDialog(QDialog):
         form.addRow("Display name", self.txt_name)
         self.cb_model = QComboBox()
         self.cb_model.addItem("Use the base item's model", None)
-        for asset_id, name, cgf in compiled_models(workspace):
-            self.cb_model.addItem(f"Workspace model: {name}  ({cgf.name})", (asset_id, cgf.name))
+        for asset_id, label, model in compiled_models(workspace):
+            self.cb_model.addItem(f"Workspace model: {label}", (asset_id, model))
         form.addRow("Model", self.cb_model)
         root.addLayout(form)
 
@@ -219,9 +225,11 @@ class NewItemDialog(QDialog):
             item = new_item_from_base(base, self.store.unique_item_id(display), display, mode=MODE_NEW)
             model = self.cb_model.currentData()
             if model:
-                asset_id, cgf_name = model
-                folder = str(Path(base.attrs.get("Model", "manmade/weapons")).parent.as_posix())
-                item.attributes["Model"] = f"{folder}/{cgf_name}" if folder not in ("", ".") else cgf_name
+                asset_id, model_path = model
+                if "/" not in model_path:
+                    folder = str(Path(base.attrs.get("Model", "manmade/weapons")).parent.as_posix())
+                    model_path = f"{folder}/{model_path}" if folder not in ("", ".") else model_path
+                item.attributes["Model"] = model_path
                 item.workspace_asset_id = asset_id
         self.result_item = item
         self.accept()

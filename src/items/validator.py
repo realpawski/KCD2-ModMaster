@@ -35,7 +35,8 @@ def _custom_model_found(item: GameItemDefinition, asset_dir: Path | None) -> boo
     if not asset_dir or not item.model_path:
         return False
     name = Path(item.model_path).name
-    for candidate in (asset_dir / "source" / name, asset_dir / name, asset_dir / "export" / name):
+    compiled = asset_dir / "compiled" / "Objects" / item.model_path
+    for candidate in (compiled, asset_dir / "source" / name, asset_dir / name, asset_dir / "export" / name):
         if candidate.is_file() and candidate.read_bytes()[:4] == b"CrCh":
             return True
     return False

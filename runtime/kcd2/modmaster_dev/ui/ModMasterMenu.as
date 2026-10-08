@@ -78,7 +78,7 @@ class ModMasterMenu {
    add("Close Menu","close","Return control to the game.",undefined);
   } else if(active=="PLAYER") {
    add("God Mode  ["+god.toUpperCase()+"]","god",
-    "RPG buff-based invulnerability (packaged buff__modmaster.xml). Persists across menu open/close and through combat -- this is not tied to the menu at all.\n\nStatus\n"+god.toUpperCase()+"\n\nBackend\nModMaster RPG Buff",
+    "Invulnerability through the game's own immortality buff. Stays active while the menu is closed and is never saved.\n\nStatus\n"+god.toUpperCase()+"\n\nBackend\nModMaster RPG Buff",
     god=="ON"?"on":(god=="unavailable"?"unavailable":"off"));
    add("Freecam  ["+freecamStatus+"]","freecam",
     "Detach the camera and fly freely. The player stays where they are. Works immediately -- the menu does not need to close first.\n\nControls\nWASD Move\nQ/E Vertical\nShift Fast\nCtrl Precision\nArrows Look (menu closed)\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nModMaster Freecam (direct camera transform)",
@@ -130,7 +130,7 @@ class ModMasterMenu {
   var start:Number=Math.floor(focus/9)*9;var count:Number=Math.min(9,entries.length-start);
   box(34,48,292,62,0xE4D6B8,100);
   label("KCD2 MODMASTER",46,59,266,28,21,0x241C12);
-  label("RUNTIME 0.5.0",48,87,266,16,10,0x6B5A3A);
+  label("RUNTIME 0.5.1",48,87,266,16,10,0x6B5A3A);
   box(34,110,292,3,0xBD9A5F,100);
   box(34,113,292,25,0x100D0A,94);
   var crumb:String=breadcrumb();

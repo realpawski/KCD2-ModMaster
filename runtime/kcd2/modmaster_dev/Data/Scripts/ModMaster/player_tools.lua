@@ -3,7 +3,8 @@ function ModMasterDev:PlayerEntity()
     return g_localActor
 end
 
-ModMasterGodGuid="164dbdc7-3c21-4781-90e5-e65a3c252ecb"
+-- Vanilla player_immortality_nonpersistent; never written to saves.
+ModMasterGodGuid="44e1ccc9-9252-48a9-922d-2ae4523c69a3"
 -- Vanilla remove_injuries buff from Libs/Tables/rpg/buff.xml.
 ModMasterRemoveInjuriesGuid="46683e3b-e261-412f-b402-99ee17dda62a"
 ModMasterColliderNormal=0

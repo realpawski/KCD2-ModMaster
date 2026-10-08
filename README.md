@@ -25,7 +25,7 @@ Browse the game's files, create and balance items, and install mods without touc
 
 **Asset browser.** Search all archives of the game, inspect models in a 3D viewport, and view textures, materials and tables. Archives are read in place and never modified.
 
-**Blender bridge.** Open game models in Blender with materials rebuilt, edit them, and use them as custom models for new items.
+**Blender bridge.** Open game models in Blender with materials rebuilt and edit them. *Export to KCD2* compiles anything in your scene, from game models to your own FBX or OBJ imports, into a game-ready `.cgf` with material and textures. Add it to a mod and it shows up in the in-game spawn menu or as the model of a new item.
 
 **In-game menu.** An optional companion mod adds a menu to the game for spawning props and items, plus freecam, noclip and god mode for testing your work.
 
@@ -35,6 +35,7 @@ Browse the game's files, create and balance items, and install mods without touc
 - Kingdom Come: Deliverance II (Steam)
 - Optional: [Blender](https://www.blender.org/) 4.2 or newer for the Blender bridge
 - Optional: KCD2 Blender Toolkit for 3D model previews
+- Optional: KCD2 Modding Tools (free on Steam) to compile your own models
 
 ## Installation
 

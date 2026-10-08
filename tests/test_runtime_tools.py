@@ -98,7 +98,7 @@ def test_manifest_is_xml_and_escapes_display_name(manager):
 def test_glb_not_claimed_as_compiled_asset(manager):
     p = project(manager)
     p.assets = ["barrel"]
-    with pytest.raises(ValueError, match="no compiled runtime descriptor"):
+    with pytest.raises(ValueError, match="has no compiled model yet"):
         manager.build_project(p)
     p.assets = []
     (Path(p.project_dir) / "game/barrel.glb").write_bytes(b"glTF")

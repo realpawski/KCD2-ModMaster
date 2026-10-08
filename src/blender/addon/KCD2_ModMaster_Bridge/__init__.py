@@ -11,15 +11,15 @@ import bpy
 
 bl_info = {
     "name": "KCD2 ModMaster Bridge",
-    "author": "KCD2 ModMaster",
-    "version": (1, 0, 0),
+    "author": "PAWSKI",
+    "version": (1, 1, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > KCD2 ModMaster",
     "description": "Seamless one-click bridge between KCD2 ModMaster and Blender.",
     "category": "Import-Export",
 }
 
-from . import bridge, metadata, operators, panel, workspace
+from . import bridge, cgf_export, metadata, operators, panel, workspace
 
 log = logging.getLogger("KCD2_ModMaster_Bridge")
 
@@ -47,7 +47,7 @@ def _bridge_timer_callback() -> float:
                 log.info("Received rebuild_materials command")
                 bpy.ops.kcd2.rebuild_materials()
             elif action == "ping":
-                bridge.send_message_to_modmaster({"status": "pong", "bridge_version": "1.0.0"})
+                bridge.send_message_to_modmaster({"status": "pong", "bridge_version": bridge.BRIDGE_VERSION})
             elif action == "open_workspace":
                 ws = cmd.get("workspace_dir")
                 if ws:
@@ -63,6 +63,7 @@ def _bridge_timer_callback() -> float:
 def register() -> None:
     global _timer_registered
     operators.register()
+    cgf_export.register()
     panel.register()
 
     # Start IPC listener client
@@ -94,6 +95,7 @@ def unregister() -> None:
         pass
 
     panel.unregister()
+    cgf_export.unregister()
     operators.unregister()
     log.info("KCD2 ModMaster Bridge addon unregistered.")
 

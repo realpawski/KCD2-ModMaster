@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from blender.bridge_manager import BlenderBridgeManager
+from compiler import compiled_models
 from mods.project import ModManager
 from ui import theme
 from ui.context import AppContext
@@ -163,8 +164,13 @@ class WorkspaceAssetsPage(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem(", ".join(self.owners.get(a.asset_id, [])) or "—"))
             has_blend = bool(a.blend_file and Path(a.blend_file).is_file())
             self.table.setItem(row, 4, QTableWidgetItem("Yes" if has_blend else "No"))
-            has_export = bool(a.export_file and Path(a.export_file).is_file())
-            self.table.setItem(row, 5, QTableWidgetItem("Exported" if has_export else "Not exported"))
+            if compiled_models(Path(a.workspace_dir)):
+                export = "Compiled (.cgf)"
+            elif a.export_file and Path(a.export_file).is_file():
+                export = "GLB only"
+            else:
+                export = "Not exported"
+            self.table.setItem(row, 5, QTableWidgetItem(export))
         self._set_actions_enabled(False)
 
     def _on_selection_changed(self) -> None:

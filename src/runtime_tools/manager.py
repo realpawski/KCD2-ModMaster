@@ -301,6 +301,8 @@ class RuntimeManager:
             item, asset_dir = s.item, s.asset_dir
             if not item.uses_custom_model or not item.model_path or asset_dir is None:
                 continue
+            if (asset_dir / "compiled" / "Objects" / item.model_path).is_file():
+                continue
             target_cgf = game_objects / item.model_path
             target_cgf.parent.mkdir(parents=True, exist_ok=True)
             if not target_cgf.is_file():
@@ -331,6 +333,36 @@ class RuntimeManager:
             extra[inventory_preset_path(project.id)] = preset.encode("ascii")
         return items, extra
 
+    def _stage_compiled_assets(self, project, items) -> tuple[list[dict], dict[str, bytes]]:
+        from compiler import compiled_files, compiled_models
+        from workspace.asset_model import list_workspace_assets
+
+        known = {a.asset_id: a for a in list_workspace_assets(self.workspace)}
+        used_by_items = {i.workspace_asset_id for i in items if i.workspace_asset_id}
+        entries, extra = [], {}
+        for asset_id in list(dict.fromkeys(list(project.assets) + sorted(used_by_items))):
+            asset = known.get(asset_id)
+            asset_dir = Path(asset.workspace_dir) if asset else self.workspace / "Assets" / asset_id
+            models = compiled_models(asset_dir)
+            if not models:
+                if asset_id in used_by_items:
+                    continue
+                name = asset.name if asset else asset_id
+                raise ValueError(f"{name} has no compiled model yet. In Blender, use Export to KCD2 (.cgf), "
+                                 "or remove the asset from this mod.")
+            for path, file in compiled_files(asset_dir).items():
+                extra[path] = file.read_bytes()
+            if asset_id not in project.assets:
+                continue
+            for model in models:
+                stem = Path(model).stem
+                entries.append({"id": asset_id if len(models) == 1 else f"{asset_id}_{stem}",
+                                "name": asset.name if asset else asset_id, "category": "props",
+                                "spawn_type": "static_prop", "spawn_id": f"{project.id}:{asset_id}",
+                                "model_path": model, "status": "packaged_unverified",
+                                "lods": [], "physics": False, "source": "compiled_custom"})
+        return entries, extra
+
     @staticmethod
     def _item_registry_entry(item) -> dict:
         from items.fields import RUNTIME_CATEGORY
@@ -342,9 +374,9 @@ class RuntimeManager:
     def build_project(self, project) -> Path:
         mod_id(project.id)
         items, extra = self._stage_game_items(project)
-        assets = read_spawn_descriptors(project) + [self._item_registry_entry(i) for i in items]
-        if project.assets and not assets:
-            raise ValueError("Assigned Blender assets have no compiled runtime descriptor. GLB is not a KCD2 asset.")
+        props, compiled = self._stage_compiled_assets(project, items)
+        extra = {**compiled, **extra}
+        assets = read_spawn_descriptors(project) + props + [self._item_registry_entry(i) for i in items]
         entry = {"id": project.id, "name": project.name, "version": project.version, "assets": assets}
         root = Path(project.project_dir)
         if root.is_symlink() or root.is_junction():
