@@ -90,63 +90,158 @@ def segregate_proxies(coll: Any, new_objs: list[Any]) -> list[Any]:
     return visual_objs
 
 
-def import_asset_into_scene(metadata: dict[str, Any]) -> bool:
-    """Executes geometry import and staging into Blender scene."""
-    interchange = metadata.get("interchange_file", "")
-    asset_name = metadata.get("asset_name", "asset")
-    blend_path = metadata.get("blend_file", "")
-
-    p_interchange = Path(interchange)
-    if not p_interchange.is_file():
-        log.error("Interchange file not found: %s", interchange)
-        return False
-
-    scene = bpy.context.scene
-
-    coll_name = f"KCD2_{asset_name}"
-    coll = bpy.data.collections.get(coll_name)
-    if not coll:
-        coll = bpy.data.collections.new(coll_name)
-        scene.collection.children.link(coll)
-
-    view_layer = bpy.context.view_layer
-    view_layer.active_layer_collection = (
-        view_layer.layer_collection.children.get(coll_name) or view_layer.layer_collection
-    )
-
-    existing_objs = set(bpy.data.objects)
-
+def _alive(obj: Any) -> bool:
     try:
-        bpy.ops.import_scene.gltf(
-            filepath=str(p_interchange),
-            import_pack_images=False,
-            merge_vertices=False,
-            guess_original_bind_pose=True,
-        )
-    except Exception as err:
-        log.error("GLTF import failed: %s", err)
+        return obj.name in bpy.data.objects
+    except ReferenceError:
         return False
 
-    new_objs = [obj for obj in bpy.data.objects if obj not in existing_objs]
 
+def _copy_bones(src: Any, dst: Any, names: list[str]) -> None:
+    """Adds bones that only one part of a character uses, e.g. a head with its own eye bones."""
+    to_dst = dst.matrix_world.inverted() @ src.matrix_world
+    bones = [src.data.bones[n] for n in names]
+    previous = bpy.context.view_layer.objects.active
+    bpy.context.view_layer.objects.active = dst
+    bpy.ops.object.mode_set(mode='EDIT')
+    try:
+        edit = dst.data.edit_bones
+        for bone in bones:
+            new = edit.new(bone.name)
+            new.length = bone.length
+            new.matrix = to_dst @ bone.matrix_local
+            new.use_deform = bone.use_deform
+        for bone in bones:
+            if bone.parent is not None and bone.parent.name in edit:
+                edit[bone.name].parent = edit[bone.parent.name]
+    finally:
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.context.view_layer.objects.active = previous
+
+
+def merge_armatures(objs: list[Any]) -> Any | None:
+    """Character parts arrive with one copy of the same skeleton each; keep one and rebind the rest."""
+    arms = [o for o in objs if o.type == 'ARMATURE']
+    if not arms:
+        return None
+    main = max(arms, key=lambda a: len(a.data.bones))
+    for arm in arms:
+        if arm == main:
+            continue
+        main_bones = {b.name for b in main.data.bones}
+        missing = [b.name for b in arm.data.bones if b.name not in main_bones]
+        if missing:
+            _copy_bones(arm, main, missing)
+        for obj in [o for o in objs if _alive(o) and o != arm]:
+            if obj.parent == arm:
+                world = obj.matrix_world.copy()
+                obj.parent = main
+                obj.matrix_world = world
+            for mod in getattr(obj, "modifiers", []):
+                if mod.type == 'ARMATURE' and mod.object == arm:
+                    mod.object = main
+        bpy.data.objects.remove(arm, do_unlink=True)
+    return main
+
+
+def strip_rig(objs: list[Any]) -> None:
+    """Keeps the meshes in their bind pose and drops skeleton, bone shapes and armature modifiers."""
+    for obj in objs:
+        if obj.type != 'MESH':
+            continue
+        for mod in list(obj.modifiers):
+            if mod.type == 'ARMATURE':
+                obj.modifiers.remove(mod)
+        if obj.parent is not None and obj.parent.type == 'ARMATURE':
+            world = obj.matrix_world.copy()
+            obj.parent = None
+            obj.matrix_world = world
+    for obj in objs:
+        if obj.type == 'ARMATURE':
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def _import_glb(path: Path, coll: Any) -> list[Any]:
+    existing = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(
+        filepath=str(path),
+        import_pack_images=False,
+        merge_vertices=False,
+        guess_original_bind_pose=True,
+    )
+    new_objs = [obj for obj in bpy.data.objects if obj not in existing]
     for obj in new_objs:
         if obj.name not in coll.objects:
             for c in obj.users_collection:
                 c.objects.unlink(obj)
             coll.objects.link(obj)
+    return new_objs
 
-    visual_objs = segregate_proxies(coll, new_objs)
-    for obj in visual_objs:
-        validate_mesh_uvs(obj)
 
-    try:
-        reconstruct_all_materials_for_objects(visual_objs, metadata, allow_imported=True)
-    except Exception as mat_err:
-        log.warning("Material reconstruction notice: %s", mat_err)
+def import_asset_into_scene(metadata: dict[str, Any]) -> bool:
+    """Executes geometry import and staging into Blender scene."""
+    asset_name = metadata.get("asset_name", "asset")
+    blend_path = metadata.get("blend_file", "")
+    parts = metadata.get("parts") or [{
+        "interchange_file": metadata.get("interchange_file", ""),
+        "materials": metadata.get("materials", []),
+        "mtl_path": metadata.get("mtl_path", ""),
+    }]
+    missing = [p["interchange_file"] for p in parts if not Path(p["interchange_file"]).is_file()]
+    if missing:
+        log.error("Interchange file not found: %s", missing[0])
+        return False
 
-    tag_blender_entities(scene, coll, new_objs, metadata)
+    scene = bpy.context.scene
+    coll_name = f"KCD2_{asset_name}"
+    coll = bpy.data.collections.get(coll_name)
+    if not coll:
+        coll = bpy.data.collections.new(coll_name)
+        scene.collection.children.link(coll)
+    view_layer = bpy.context.view_layer
+    view_layer.active_layer_collection = (
+        view_layer.layer_collection.children.get(coll_name) or view_layer.layer_collection
+    )
+
+    all_new: list[Any] = []
+    visual_objs: list[Any] = []
+    for part in parts:
+        try:
+            new_objs = _import_glb(Path(part["interchange_file"]), coll)
+        except Exception as err:
+            log.error("GLTF import failed: %s", err)
+            return False
+        all_new += new_objs
+        part_visual = [o for o in segregate_proxies(coll, new_objs) if o.type == 'MESH']
+        for obj in part_visual:
+            validate_mesh_uvs(obj)
+        try:
+            reconstruct_all_materials_for_objects(part_visual, {**metadata, **part}, allow_imported=True)
+        except Exception as mat_err:
+            log.warning("Material reconstruction notice: %s", mat_err)
+        visual_objs += part_visual
+
+    # The glTF importer adds an icosphere as bone display shape; it must never be exported.
+    shapes = [o for o in all_new if o.type == 'MESH' and o.name.startswith("Icosphere")
+              and o.parent is None and not o.vertex_groups and not o.material_slots]
+    for obj in shapes:
+        obj.hide_viewport = True
+        obj.hide_render = True
+        visual_objs = [v for v in visual_objs if v != obj]
+
+    if metadata.get("strip_rig"):
+        strip_rig(all_new)
+        for obj in shapes:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        all_new = [o for o in all_new if _alive(o)]
+    else:
+        merge_armatures(all_new)
+        all_new = [o for o in all_new if _alive(o)]
+
+    tag_blender_entities(scene, coll, all_new, metadata)
 
     bpy.ops.object.select_all(action='DESELECT')
+    visual_objs = [o for o in visual_objs if _alive(o)]
     for obj in visual_objs:
         obj.select_set(True)
     if visual_objs:

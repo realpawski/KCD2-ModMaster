@@ -12,7 +12,7 @@ from typing import Any
 
 log = logging.getLogger("KCD2_ModMaster_Bridge.metadata")
 
-BRIDGE_VERSION = "1.1.0"
+BRIDGE_VERSION = "1.2.0"
 
 
 def default_asset_metadata(

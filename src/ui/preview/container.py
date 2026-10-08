@@ -28,6 +28,7 @@ from preview.converter import prepare_3d_preview
 from preview.lods import LodFamily, find_lod_family
 from ui import theme
 from ui.context import AppContext
+from ui.dialogs.import_mode_dialog import choose_import_mode
 from ui.icons import get_svg_icon
 from ui.preview.material_viewer import MaterialViewer
 from ui.preview.texture_viewer import TextureViewer2D
@@ -287,7 +288,10 @@ class PreviewContainer(QWidget):
             return
         self.lbl_hud_status.setText("Launching Blender Bridge…")
         try:
-            self.bridge_mgr.open_in_blender(self.current_row, self.ctx.index)
+            mode = choose_import_mode(self, self.bridge_mgr, self.current_row, self.ctx.index)
+            if mode is None:
+                return
+            self.bridge_mgr.open_in_blender(self.current_row, self.ctx.index, mode=mode)
             self.lbl_hud_working_copy.setText(f"WORKING COPY: Opened in Blender ({Path(self.current_row.filename).stem})")
             self.lbl_hud_working_copy.setStyleSheet("font-size: 8.5pt; font-weight: 700; color: #e9ebef;")
         except Exception as e:
@@ -298,7 +302,10 @@ class PreviewContainer(QWidget):
         if not self.current_row:
             return
         try:
-            meta = self.bridge_mgr.prepare_editable_workspace(self.current_row, self.ctx.index)
+            mode = choose_import_mode(self, self.bridge_mgr, self.current_row, self.ctx.index)
+            if mode is None:
+                return
+            meta = self.bridge_mgr.prepare_editable_workspace(self.current_row, self.ctx.index, mode=mode)
             self.lbl_hud_working_copy.setText(f"WORKING COPY: Editable ({meta['asset_name']})")
             self.lbl_hud_working_copy.setStyleSheet("font-size: 8.5pt; font-weight: 700; color: #e9ebef;")
             QMessageBox.information(

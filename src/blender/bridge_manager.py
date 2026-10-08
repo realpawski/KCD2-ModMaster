@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_IPC_HOST = "127.0.0.1"
 DEFAULT_IPC_PORT = 24952
-CURRENT_BRIDGE_VERSION = "1.1.0"
+CURRENT_BRIDGE_VERSION = "1.2.0"
 ADDON_NAME = "KCD2_ModMaster_Bridge"
 
 
@@ -435,13 +435,35 @@ class BlenderBridgeManager:
         stem = Path(row.filename).stem
         return re.sub(r"[^\w\-]", "_", stem)
 
+    @staticmethod
+    def rig_source(row: AssetRow, index: AssetIndex) -> AssetRow | None:
+        """The skinned file behind a model: the row itself, or a .cdf/.skin next to a static .cgf."""
+        ext = row.ext.lower()
+        if ext in ("cdf", "skin", "chr"):
+            return row
+        if ext == "cgf":
+            stem = row.vpath.rsplit(".", 1)[0]
+            for candidate in ("cdf", "skin"):
+                hits = index.find_by_vpath(f"{stem}.{candidate}")
+                if hits:
+                    return hits[0]
+        return None
+
     def prepare_editable_workspace(
         self,
         row: AssetRow,
         index: AssetIndex,
         progress_cb: Callable[[str], None] | None = None,
+        mode: str = "static",
     ) -> dict[str, Any]:
         """Creates the dedicated editable workspace for an asset and prepares GLB interchange."""
+        if mode == "rigged":
+            source = self.rig_source(row, index)
+            if source is None:
+                raise UserFacingError(f"{row.filename} has no skeleton to import.")
+            return self._prepare_skinned(source, index, progress_cb, keep_rig=True)
+        if row.ext.lower() in ("cdf", "skin", "chr"):
+            return self._prepare_skinned(row, index, progress_cb, keep_rig=False)
         slug = self.get_asset_slug(row)
         ws_root = self.settings.workspace / "Assets" / slug
         source_dir = ws_root / "source"
@@ -583,12 +605,139 @@ class BlenderBridgeManager:
         self._active_asset_metadata = meta
         return meta
 
+    def _skinned_parts(self, src: AssetRow) -> tuple[str, list[tuple[str, str]]]:
+        """(skeleton path, [(skin path, material path)]) for a .cdf, .skin or .chr."""
+        if src.ext.lower() != "cdf":
+            return src.vpath, [(src.vpath, "")]
+        from xml.etree import ElementTree as ET
+        with PakArchive(src.archive_path) as pak:
+            root = ET.fromstring(pak.read(src.vpath))
+        model = root.find("Model")
+        skeleton = model.get("File", "") if model is not None else ""
+        parts = [(a.get("Binding", ""), a.get("Material", ""))
+                 for a in root.iter("Attachment")
+                 if a.get("Type", "").upper() == "CA_SKIN" and a.get("Binding", "").lower().endswith(".skin")]
+        if not parts:
+            if not skeleton:
+                raise UserFacingError(f"{src.filename} lists no skin attachments.")
+            parts = [(skeleton, "")]
+        return skeleton, parts
+
+    def _prepare_skinned(self, src: AssetRow, index: AssetIndex,
+                         progress_cb: Callable[[str], None] | None, keep_rig: bool) -> dict[str, Any]:
+        from preview.skin_uv import inject_skin_uvs
+
+        slug = self.get_asset_slug(src) + ("_rigged" if keep_rig else "_static")
+        ws_root = self.settings.workspace / "Assets" / slug
+        source_dir, textures_dir = ws_root / "source", ws_root / "textures"
+        blender_dir, export_dir, meta_dir = ws_root / "blender", ws_root / "export", ws_root / "metadata"
+        for d in (source_dir, textures_dir, blender_dir, export_dir, meta_dir):
+            d.mkdir(parents=True, exist_ok=True)
+        meta_file = meta_dir / ".modmaster_asset.json"
+        if meta_file.is_file():
+            try:
+                existing = json.loads(meta_file.read_text(encoding="utf-8"))
+                if existing.get("parts") and all(Path(p["interchange_file"]).is_file() for p in existing["parts"]):
+                    self._active_asset_metadata = existing
+                    return existing
+            except (OSError, ValueError, KeyError):
+                pass
+
+        conv_exe = find_converter_exe(self.settings)
+        if not conv_exe:
+            raise UserFacingError("KCD2-Convertor.exe not found.")
+        skeleton, parts = self._skinned_parts(src)
+        parts_meta: list[dict[str, Any]] = []
+        with index.connection(read_only=True) as conn:
+            for number, (skin_path, mtl_path) in enumerate(parts):
+                rows = index.find_by_vpath(skin_path, conn=conn)
+                if not rows:
+                    log.warning("Skin %s listed in %s is not in the index", skin_path, src.filename)
+                    continue
+                skin_row = rows[0]
+                if progress_cb:
+                    progress_cb(f"Extracting {skin_row.filename}...")
+                with PakArchive(skin_row.archive_path) as pak:
+                    skin_file = pak.extract(skin_row.vpath, source_dir)
+                for c in index.companions(skin_row, conn=conn):
+                    with PakArchive(c.archive_path) as cpak:
+                        cpak.extract(c.vpath, source_dir)
+
+                mtl_row = None
+                if mtl_path:
+                    found = index.find_by_vpath(mtl_path, conn=conn)
+                    mtl_row = found[0] if found else None
+                mtl_row = mtl_row or resolve_mtl_row(index, skin_row, conn=conn)
+                mtl_file: Path | None = None
+                materials: list[dict[str, Any]] = []
+                if mtl_row:
+                    with PakArchive(mtl_row.archive_path) as mpak:
+                        mtl_data = mpak.read(mtl_row.vpath)
+                    mtl_file = skin_file.parent / mtl_row.filename
+                    mtl_file.write_bytes(mtl_data)
+                    try:
+                        mtl_def = parse_mtl_xml(mtl_data, mtl_vpath=mtl_row.vpath)
+                        resolve_and_stage_textures(mtl_def, index, textures_dir, conn=conn)
+                        materials = [asdict(sub) for sub in mtl_def.submaterials]
+                    except Exception as err:
+                        log.warning("MTL texture resolution notice: %s", err)
+
+                if progress_cb:
+                    progress_cb(f"Converting {skin_row.filename} with its skeleton...")
+                cmd = [str(conv_exe), str(skin_file), "-glb", "-objectdir", str(textures_dir)]
+                if mtl_file:
+                    cmd += ["-material", str(mtl_file), "-embedtextures"]
+                proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(skin_file.parent), timeout=120)
+                produced = skin_file.with_suffix(".glb")
+                if not produced.is_file():
+                    raise UserFacingError(f"Converter failed for {skin_row.filename}: {proc.stdout[-500:]}")
+                glb = source_dir / f"{slug}_part{number}_{skin_file.stem}.glb"
+                shutil.move(str(produced), glb)
+                inject_skin_uvs(glb, skin_file)
+                parts_meta.append({"interchange_file": str(glb), "materials": materials,
+                                   "mtl_path": mtl_row.vpath if mtl_row else "", "virtual_path": skin_row.vpath})
+        if not parts_meta:
+            raise UserFacingError(f"No skins of {src.filename} could be converted.")
+
+        meta = {
+            "version": CURRENT_BRIDGE_VERSION,
+            "asset_id": slug,
+            "asset_name": slug,
+            "filename": src.filename,
+            "virtual_path": src.vpath,
+            "source_archive": src.archive_name,
+            "skeleton": skeleton,
+            "rigged": keep_rig,
+            "strip_rig": not keep_rig,
+            "parts": parts_meta,
+            "interchange_file": parts_meta[0]["interchange_file"],
+            "materials": parts_meta[0]["materials"],
+            "mtl_path": parts_meta[0]["mtl_path"],
+            "mtl_name": Path(parts_meta[0]["mtl_path"]).name,
+            "project": "Default Project",
+            "workspace_dir": str(ws_root),
+            "source_dir": str(source_dir),
+            "textures_dir": str(textures_dir),
+            "blend_file": str(blender_dir / f"{slug}.blend"),
+            "export_dir": str(export_dir),
+            "export_file": str(export_dir / f"{slug}_exported.glb"),
+            "status": "unmodified",
+            "created_at": time.time(),
+            "last_exported": None,
+            "textures": [str(p) for p in textures_dir.glob("*.dds")],
+            "material_schema_version": 2,
+        }
+        meta_file.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        self._active_asset_metadata = meta
+        return meta
+
     # Open in Blender Workflow
     def open_in_blender(
         self,
         row: AssetRow,
         index: AssetIndex,
         progress_cb: Callable[[str], None] | None = None,
+        mode: str = "static",
     ) -> None:
         """One-click workflow: stages asset, launches/signals Blender, and imports model."""
         blender_exe = self.settings.blender_exe
@@ -598,7 +747,7 @@ class BlenderBridgeManager:
                 "Please set your Blender 5.2/5.1 path in Settings."
             )
 
-        meta = self.prepare_editable_workspace(row, index, progress_cb=progress_cb)
+        meta = self.prepare_editable_workspace(row, index, progress_cb=progress_cb, mode=mode)
         slug = meta["asset_name"]
         blend_file = Path(meta["blend_file"])
 

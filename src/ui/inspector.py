@@ -24,6 +24,7 @@ from database.index import AssetRow
 from kcd2.formats import EXT_LABELS, mtl_texture_candidates, pretty_path
 from ui import theme
 from ui.context import AppContext
+from ui.dialogs.import_mode_dialog import choose_import_mode
 from ui.icons import get_svg_icon
 from utils.helpers import human_size, reveal_in_explorer
 
@@ -295,7 +296,10 @@ class InspectorWidget(QScrollArea):
         if not self.row:
             return
         try:
-            self.bridge_mgr.open_in_blender(self.row, self.ctx.index)
+            mode = choose_import_mode(self, self.bridge_mgr, self.row, self.ctx.index)
+            if mode is None:
+                return
+            self.bridge_mgr.open_in_blender(self.row, self.ctx.index, mode=mode)
             self._update_working_copy_info()
         except Exception as e:
             QMessageBox.critical(self, "Open in Blender Error", str(e))
@@ -304,7 +308,10 @@ class InspectorWidget(QScrollArea):
         if not self.row:
             return
         try:
-            meta = self.bridge_mgr.prepare_editable_workspace(self.row, self.ctx.index)
+            mode = choose_import_mode(self, self.bridge_mgr, self.row, self.ctx.index)
+            if mode is None:
+                return
+            meta = self.bridge_mgr.prepare_editable_workspace(self.row, self.ctx.index, mode=mode)
             self._update_working_copy_info()
             QMessageBox.information(
                 self,
