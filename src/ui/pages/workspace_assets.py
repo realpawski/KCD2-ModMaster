@@ -54,6 +54,8 @@ class WorkspaceAssetsPage(QWidget):
         header = PageHeader("Workspace Assets",
                             "Models you import, copy from the game or edit in Blender. Add them to a mod "
                             "to package them, and pick them as the model of a new item.")
+        self.btn_refresh = header.add_action(button("Refresh", "arrow-path", tooltip="Reload assets from the workspace folder"))
+        self.btn_refresh.clicked.connect(self.refresh)
         self.btn_new_asset = header.add_action(button("New asset", "plus", "Primary"))
         self.btn_new_asset.clicked.connect(self._open_new_asset_wizard)
         lay.addWidget(header)
@@ -112,6 +114,14 @@ class WorkspaceAssetsPage(QWidget):
         lay.addLayout(actions)
         self._set_actions_enabled(False)
         self.ctx.mods_changed.connect(self.refresh)
+        self.bridge_mgr.signals.asset_exported.connect(self._on_asset_exported)
+        self.refresh()
+
+    def _on_asset_exported(self, *_args) -> None:
+        self.refresh()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
         self.refresh()
 
     def refresh(self) -> None:

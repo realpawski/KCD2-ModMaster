@@ -271,9 +271,9 @@ class BrowserPage(QWidget):
             i = self.class_cb.findData(opts["asset_class"])
             self.class_cb.setCurrentIndex(max(i, 0))
             self.h1.setText(opts.get("title", "Asset Browser"))
-        if "type" in opts:
-            i = self.type_cb.findData(opts["type"])
-            self.type_cb.setCurrentIndex(max(i, 0))
+        # A page without its own type must not inherit the previous page's type filter.
+        i = self.type_cb.findData(opts.get("type"))
+        self.type_cb.setCurrentIndex(max(i, 0))
         self.search.setFocus()
 
     def reload_archives(self) -> None:

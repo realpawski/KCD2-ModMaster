@@ -132,7 +132,7 @@ def import_asset_into_scene(metadata: dict[str, Any]) -> bool:
     for obj in new_objs:
         if obj.name not in coll.objects:
             for c in obj.users_collection:
-                c.unlink(obj)
+                c.objects.unlink(obj)
             coll.objects.link(obj)
 
     visual_objs = segregate_proxies(coll, new_objs)
