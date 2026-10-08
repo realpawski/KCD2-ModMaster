@@ -298,3 +298,18 @@ def test_player_tab_handles_native_query_errors():
  event(lua,'tab:PLAYER')
  event(lua,'god')
  assert lua.eval('ModMasterDev.opened and frozen and not mapsEnabled')
+
+
+def test_rigged_models_spawn_as_animated_objects():
+ lua=runtime()
+ lua.execute('''
+  spawned={}
+  System.SpawnEntity=function(spec) table.insert(spawned,spec);return {id=#spawned,GetWorldAngles=function() return {x=0,y=0,z=0} end,GetScale=function() return 1 end} end
+  System.GetEntity=function() end;System.RemoveEntity=function() end
+  ModMasterDev:SpawnAsset({id="pig",name="Pig",model_path="Objects/modmaster/pig/pig.cdf",animation="relaxed_idle_new"},{x=0,y=0,z=0})
+  ModMasterDev:SpawnAsset({id="crate",name="Crate",model_path="Objects/modmaster/crate/crate.cgf"},{x=0,y=0,z=0})
+ ''')
+ assert lua.eval('spawned[1].class')=='AnimObject'
+ assert lua.eval('spawned[1].properties.Animation.Animation')=='relaxed_idle_new'
+ assert lua.eval('spawned[1].properties.Animation.bPlaying and spawned[1].properties.Animation.bLoop')
+ assert lua.eval('spawned[2].class')=='BasicEntity'

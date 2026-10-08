@@ -81,7 +81,7 @@ class KCD2_PT_modmaster_panel(bpy.types.Panel):
         layout.separator()
         col_exp = layout.column(align=True)
         col_exp.scale_y = 1.2
-        col_exp.operator("kcd2.export_cgf", text="EXPORT TO KCD2 (.CGF)", icon=icon('EXPORT'))
+        col_exp.operator("kcd2.export_cgf", text="EXPORT TO KCD2", icon=icon('EXPORT'))
         col_exp.operator("kcd2.export_to_workspace", text="EXPORT GLB PREVIEW", icon=icon('FILE_3D'))
         col_exp.operator("kcd2.export_as_new_asset", text="EXPORT AS NEW ASSET", icon=icon('DUPLICATE'))
         col_exp.operator("kcd2.open_workspace_folder", text="OPEN WORKSPACE FOLDER", icon=icon('FILE_FOLDER'))

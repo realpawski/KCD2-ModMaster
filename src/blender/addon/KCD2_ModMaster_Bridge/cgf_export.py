@@ -8,7 +8,7 @@ from pathlib import Path
 
 import bpy
 
-from . import cry_compile
+from . import cry_compile, dae_export
 from .bridge import send_message_to_modmaster
 from .metadata import get_active_asset_metadata
 from .panel import icon
@@ -129,6 +129,53 @@ def _material_entry(mat, name: str, rc: Path, work: Path, tex_root: Path, tex_vi
     return entry
 
 
+def _rigged_meshes(meshes: list) -> tuple:
+    """The armature the meshes deform with and the meshes bound to it."""
+    for obj in meshes:
+        for mod in obj.modifiers:
+            if mod.type == "ARMATURE" and mod.object is not None:
+                arm = mod.object
+                bound = [o for o in meshes if any(m.type == "ARMATURE" and m.object == arm for m in o.modifiers)]
+                return arm, bound
+    return None, []
+
+
+def _original_bones(meta: dict) -> dict:
+    """Bone matrices from the game files the rigged model was imported from."""
+    bones: dict = {}
+    source = Path(meta.get("source_dir", ""))
+    for part in meta.get("parts", []):
+        path = source / part.get("virtual_path", "")
+        if path.is_file():
+            for name, rows in cry_compile.read_bone_matrices(path.read_bytes()).items():
+                bones.setdefault(name, rows)
+    return bones
+
+
+class _GameOrientation:
+    """Turns the meshes back into game orientation for the duration of an export."""
+
+    def __init__(self, objects: list):
+        self.saved = {o: o.matrix_world.copy() for o in objects}
+        self.order = sorted(objects, key=self._depth)
+
+    @staticmethod
+    def _depth(obj) -> int:
+        depth = 0
+        while obj.parent is not None:
+            obj, depth = obj.parent, depth + 1
+        return depth
+
+    def __enter__(self):
+        for obj in self.order:
+            obj.matrix_world = dae_export.TO_GAME @ self.saved[obj]
+        return self
+
+    def __exit__(self, *_exc):
+        for obj in self.order:
+            obj.matrix_world = self.saved[obj]
+
+
 def _ensure_asset(root: Path, asset_id: str, display: str) -> Path:
     folder = root / "Assets" / asset_id
     meta = folder / "metadata" / ".modmaster_asset.json"
@@ -145,11 +192,15 @@ def _ensure_asset(root: Path, asset_id: str, display: str) -> Path:
 
 
 class KCD2_OT_export_cgf(bpy.types.Operator):
-    """Compile the model into a KCD2 .cgf with material and textures"""
+    """Compile the model for KCD2: a static .cgf, or a rigged .skin with character definition"""
     bl_idname = "kcd2.export_cgf"
-    bl_label = "Export to KCD2 (.cgf)"
+    bl_label = "Export to KCD2"
     bl_options = {"REGISTER"}
 
+    export_type: bpy.props.EnumProperty(name="Export as", items=[
+        ("STATIC", "Static model (.cgf)", "A prop or the model of an item. Bones and weights are ignored"),
+        ("RIGGED", "Rigged model (.skin)", "Keeps skin weights on the game skeleton so the game's animations play"),
+    ])
     target: bpy.props.EnumProperty(name="Asset", items=_asset_enum)
     new_name: bpy.props.StringProperty(name="Name", default="")
     selected_only: bpy.props.BoolProperty(name="Selected objects only", default=True)
@@ -164,15 +215,22 @@ class KCD2_OT_export_cgf(bpy.types.Operator):
         if not self.new_name:
             self.new_name = context.active_object.name if context.active_object else "model"
         self.selected_only = bool(context.selected_objects)
-        return context.window_manager.invoke_props_dialog(self, width=420)
+        armature, _bound = _rigged_meshes(_export_meshes(context, self.selected_only))
+        self.export_type = "RIGGED" if armature is not None and meta.get("skeleton") else "STATIC"
+        return context.window_manager.invoke_props_dialog(self, width=460)
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(self, "export_type", expand=True)
+        layout.separator()
         layout.prop(self, "target")
         if self.target == NEW_ASSET:
             layout.prop(self, "new_name")
         layout.prop(self, "selected_only")
-        layout.label(text="The model's origin is the world origin.", icon=icon("INFO"))
+        if self.export_type == "RIGGED":
+            layout.label(text="Mesh and weights may change; keep the game's bones.", icon=icon("INFO"))
+        else:
+            layout.label(text="The model's origin is the world origin.", icon=icon("INFO"))
 
     def execute(self, context):
         prefs = _prefs(context)
@@ -211,40 +269,79 @@ class KCD2_OT_export_cgf(bpy.types.Operator):
         try:
             with tempfile.TemporaryDirectory(prefix="kcd2_export_") as tmp:
                 work = Path(tmp)
-                fbx = work / f"{asset_id}.fbx"
-                bpy.ops.object.select_all(action="DESELECT")
-                for obj in meshes:
-                    obj.select_set(True)
-                context.view_layer.objects.active = meshes[0]
-                bpy.ops.export_scene.fbx(filepath=str(fbx), use_selection=True, object_types={"MESH"},
-                                         use_mesh_modifiers=True, mesh_smooth_type="FACE",
-                                         apply_scale_options="FBX_SCALE_UNITS", add_leaf_bones=False,
-                                         bake_anim=False, path_mode="STRIP")
-                subs = cry_compile.compile_model(rc, fbx, compiled / f"{model}.cgf", model)
-                entries = [_material_entry(bpy.data.materials.get(name), name, rc, work,
-                                           compiled / tex_virtual, tex_virtual, mtl_path) for name in subs]
-                cry_compile.write_mtl(compiled / f"{model}.mtl", entries)
+                if self.export_type == "RIGGED":
+                    result = self._export_rigged(meta, meshes, asset_id, rc, work, compiled, tex_virtual, mtl_path)
+                else:
+                    result = self._export_static(context, meshes, asset_id, rc, work, compiled, model,
+                                                 tex_virtual, mtl_path)
         except cry_compile.CompileError as exc:
             self.report({"ERROR"}, f"Compile failed: {exc}")
+            return {"CANCELLED"}
+        except ValueError as exc:
+            self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
         finally:
             bpy.ops.object.select_all(action="DESELECT")
             for obj in previous_selection:
                 obj.select_set(True)
             context.view_layer.objects.active = previous_active
+        produced, subs = result
 
         meta_file = asset_dir / "metadata" / ".modmaster_asset.json"
         try:
             data = json.loads(meta_file.read_text(encoding="utf-8"))
-            data.update({"compiled_model": f"{model}.cgf", "compiled_at": time.time(), "updated_at": time.time()})
+            data.update({"compiled_model": produced, "compiled_at": time.time(), "updated_at": time.time()})
             meta_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
         except (OSError, ValueError):
             pass
         send_message_to_modmaster({"command": "asset_compiled", "asset_id": asset_id,
-                                   "model": f"{model}.cgf", "timestamp": time.time()})
-        self.report({"INFO"}, f"Compiled {asset_id}.cgf with {len(subs)} material(s). "
+                                   "model": produced, "timestamp": time.time()})
+        self.report({"INFO"}, f"Compiled {Path(produced).name} with {len(subs)} material(s). "
                               "Add the asset to a mod in ModMaster and build it.")
         return {"FINISHED"}
+
+    def _materials(self, names, rc, work, compiled, tex_virtual, mtl_path, lookup):
+        return [_material_entry(lookup(name), name, rc, work, compiled / tex_virtual, tex_virtual, mtl_path)
+                for name in names]
+
+    def _export_static(self, context, meshes, asset_id, rc, work, compiled, model, tex_virtual, mtl_path):
+        fbx = work / f"{asset_id}.fbx"
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in meshes:
+            obj.select_set(True)
+        context.view_layer.objects.active = meshes[0]
+        with _GameOrientation(meshes):
+            bpy.ops.export_scene.fbx(filepath=str(fbx), use_selection=True, object_types={"MESH"},
+                                     use_mesh_modifiers=True, mesh_smooth_type="FACE",
+                                     apply_scale_options="FBX_SCALE_UNITS", add_leaf_bones=False,
+                                     bake_anim=False, path_mode="STRIP")
+        subs = cry_compile.compile_model(rc, fbx, compiled / f"{model}.cgf", model)
+        entries = self._materials(subs, rc, work, compiled, tex_virtual, mtl_path, bpy.data.materials.get)
+        cry_compile.write_mtl(compiled / f"{model}.mtl", entries)
+        return f"{model}.cgf", subs
+
+    def _export_rigged(self, meta, meshes, asset_id, rc, work, compiled, tex_virtual, mtl_path):
+        armature, bound = _rigged_meshes(meshes)
+        if armature is None:
+            raise ValueError("No mesh is bound to an armature. Import the model as 'Rigged model' first.")
+        skeleton = meta.get("skeleton")
+        if not skeleton:
+            raise ValueError("Rigged export needs a skeleton from the game. Import a character or animal "
+                             "as 'Rigged model' and export from that scene.")
+        model, _textures = cry_compile.model_paths(asset_id)
+        dae = work / f"{asset_id}.dae"
+        materials = dae_export.write_skin_dae(dae, asset_id, armature, bound, asset_id, _original_bones(meta))
+        subs = cry_compile.compile_skin(rc, dae, compiled / f"{model}.skin")
+        by_label = {dae_export.material_label(asset_id, i, m): m for i, m in enumerate(materials)}
+        by_clean = {dae_export.clean_material_name(m.name): m for m in bpy.data.materials}
+
+        def lookup(sub):
+            return by_clean.get(by_label.get(sub, dae_export.clean_material_name(sub)))
+
+        entries = self._materials(subs, rc, work, compiled, tex_virtual, mtl_path, lookup)
+        cry_compile.write_mtl(compiled / f"{model}.mtl", entries)
+        cry_compile.write_cdf(compiled / f"{model}.cdf", skeleton, f"{model}.skin", f"{model}.mtl")
+        return f"{model}.cdf", subs
 
 
 class KCD2_AddonPreferences(bpy.types.AddonPreferences):

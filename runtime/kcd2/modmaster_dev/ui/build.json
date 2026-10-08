@@ -4,7 +4,7 @@
   "compiler": "MTASC 1.14",
   "compiler_source": "https://github.com/fdorg/flashdevelop/tree/development/FlashDevelop/Bin/Debug/Tools/mtasc",
   "compiler_sha256": "2ccfcdfaeb2bb844055157e84773bc955cbe8d56b56e57c56c6c3285a3ecdc21",
-  "source_sha256": "0c65311e43a9ac55a69bfd6f8e0b80fbe476293ccb5ec609541100e22f21ef30",
-  "swf_sha256": "0d354ad89ef963bd6ca929c24ff16046f038e504f55b4a2c8abbf8d184473d5a",
+  "source_sha256": "051b99cb1d4b31e4e78f892d60898bf2f1f0bfd8230c0d0fc9262cf41c0ccc81",
+  "swf_sha256": "fbe569dab57f72e5c9d134bb789348badacbd8b6512a7fbcf90c4e81b2aeda70",
   "swf_version": 8
 }

@@ -169,3 +169,62 @@ def model_paths(asset_id: str) -> tuple[str, str]:
     """(model virtual path without extension, texture folder) inside the game's file system."""
     base = f"{OBJECTS_ROOT}/{asset_id}"
     return f"{base}/{asset_id}", f"{base}/textures"
+
+
+CHUNK_COMPILED_BONES = 0x2000
+COMPILED_BONE_SIZE = 584
+
+
+def read_bone_matrices(data: bytes) -> dict[str, list[float]]:
+    """Bone-to-world matrices (3x4, row-major) of every bone stored in a .skin or .chr."""
+    if data[:4] != b"CrCh":
+        return {}
+    _version, count, table = struct.unpack_from("<III", data, 4)
+    for i in range(count):
+        kind, version, _cid, size, offset = struct.unpack_from("<HHIII", data, table + i * 16)
+        if kind != CHUNK_COMPILED_BONES or version != 0x800:
+            continue
+        bones = {}
+        for b in range(size // COMPILED_BONE_SIZE):
+            base = offset + b * COMPILED_BONE_SIZE
+            name = data[base + 344:base + 568].split(b"\0")[0].decode("latin-1")
+            bones[name] = list(struct.unpack_from("<12f", data, base + 296))
+        return bones
+    return {}
+
+
+def write_cdf(path: Path, skeleton: str, skin: str, material: str) -> Path:
+    text = ('<CharacterDefinition>\n'
+            f' <Model File={quoteattr(skeleton)}/>\n'
+            ' <AttachmentList>\n'
+            f'  <Attachment Type="CA_SKIN" AName="body" Binding={quoteattr(skin)} Material={quoteattr(material)} '
+            'Flags="0"/>\n'
+            ' </AttachmentList>\n'
+            '</CharacterDefinition>\n')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def compile_skin(rc: Path, dae: Path, target_skin: Path) -> list[str]:
+    """Compile a CryEngine Collada file to target_skin and return the sub-material names in slot order."""
+    with tempfile.TemporaryDirectory(prefix="kcd2_rc_") as tmp:
+        work = Path(tmp)
+        shutil.copy2(dae, work / dae.name)
+        log = _run(rc, dae.name, work)
+        errors = [line.split(">", 1)[-1].strip() for line in log.splitlines() if line.lstrip().startswith("E:")]
+        if errors:
+            raise CompileError("\n".join(errors[:3]))
+        intermediate = next(work.glob("*.skin"), None)
+        if intermediate is None:
+            raise CompileError("rc.exe finished without writing a .skin file.")
+        # Collada yields the exporter's intermediate chunks; a second pass builds the game format.
+        _run(rc, intermediate.name, work, f"/targetroot={work / 'out'}")
+        built = work / "out" / intermediate.name
+        if not built.is_file():
+            raise CompileError("rc.exe did not finish the .skin file.")
+        data = built.read_bytes()
+        _name, subs = read_cgf_materials(data)
+        target_skin.parent.mkdir(parents=True, exist_ok=True)
+        target_skin.write_bytes(data)
+        return subs

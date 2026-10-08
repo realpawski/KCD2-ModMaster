@@ -26,10 +26,26 @@ def compiled_files(asset_dir: Path) -> dict[str, Path]:
     return {p.relative_to(root).as_posix(): p for p in sorted(root.rglob("*")) if p.is_file()}
 
 
-def compiled_models(asset_dir: Path) -> list[str]:
-    """Game paths of the compiled .cgf models in an asset."""
-    return [path for path, file in compiled_files(asset_dir).items()
-            if path.lower().endswith(".cgf") and file.read_bytes()[:4] == b"CrCh"]
+def compiled_models(asset_dir: Path, kinds: tuple[str, ...] = (".cgf", ".cdf")) -> list[str]:
+    """Game paths of the compiled models in an asset: static .cgf and rigged .cdf characters."""
+    result = []
+    for path, file in compiled_files(asset_dir).items():
+        ext = Path(path).suffix.lower()
+        if ext not in kinds:
+            continue
+        if ext == ".cgf" and file.read_bytes()[:4] != b"CrCh":
+            continue
+        result.append(path)
+    return result
+
+
+def cdf_skeleton(file: Path) -> str:
+    from xml.etree import ElementTree as ET
+    try:
+        model = ET.parse(file).getroot().find("Model")
+    except (OSError, ET.ParseError):
+        return ""
+    return model.get("File", "") if model is not None else ""
 
 
 def item_model_path(game_path: str) -> str:

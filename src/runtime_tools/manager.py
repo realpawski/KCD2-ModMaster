@@ -334,7 +334,7 @@ class RuntimeManager:
         return items, extra
 
     def _stage_compiled_assets(self, project, items) -> tuple[list[dict], dict[str, bytes]]:
-        from compiler import compiled_files, compiled_models
+        from compiler import cdf_skeleton, compiled_files, compiled_models
         from workspace.asset_model import list_workspace_assets
 
         known = {a.asset_id: a for a in list_workspace_assets(self.workspace)}
@@ -356,12 +356,25 @@ class RuntimeManager:
                 continue
             for model in models:
                 stem = Path(model).stem
-                entries.append({"id": asset_id if len(models) == 1 else f"{asset_id}_{stem}",
-                                "name": asset.name if asset else asset_id, "category": "props",
-                                "spawn_type": "static_prop", "spawn_id": f"{project.id}:{asset_id}",
-                                "model_path": model, "status": "packaged_unverified",
-                                "lods": [], "physics": False, "source": "compiled_custom"})
+                entry = {"id": asset_id if len(models) == 1 else f"{asset_id}_{stem}",
+                         "name": asset.name if asset else asset_id, "category": "props",
+                         "spawn_type": "static_prop", "spawn_id": f"{project.id}:{asset_id}",
+                         "model_path": model, "status": "packaged_unverified",
+                         "lods": [], "physics": False, "source": "compiled_custom"}
+                if model.lower().endswith(".cdf"):
+                    entry["animation"] = self._idle_animation(cdf_skeleton(asset_dir / "compiled" / model))
+                entries.append(entry)
         return entries, extra
+
+    def _idle_animation(self, skeleton: str) -> str:
+        from runtime_tools.animations import animation_names, default_animation
+        if not skeleton:
+            return ""
+        try:
+            return default_animation(animation_names(self.game, skeleton))
+        except (OSError, ValueError) as exc:
+            log.warning("Animations of %s unavailable: %s", skeleton, exc)
+            return ""
 
     @staticmethod
     def _item_registry_entry(item) -> dict:

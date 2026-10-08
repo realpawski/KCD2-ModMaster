@@ -35,10 +35,22 @@ function ModMasterDev:SpawnAsset(asset, pos)
     end
     self.serial=self.serial+1
     local name="ModMasterDev_" .. self.serial
-    local entity=System.SpawnEntity({class="BasicEntity",name=name,position=pos,scale=1,
-        properties={object_Model=asset.model_path,bCanTriggerAreas=false,bSaved_by_game=false,
-            Physics={bPhysicalize=true,bRigidBody=false,bPushableByPlayers=false,Mass=0,Density=0},
-            MultiplayerOptions={bNetworked=false}}})
+    local entity
+    if asset.model_path:lower():sub(-4)==".cdf" then
+        -- Characters need AnimObject to play an animation; BasicEntity would show the rest pose.
+        local animation=type(asset.animation)=="string" and asset.animation:match("^[%w_]+$") and asset.animation or ""
+        entity=System.SpawnEntity({class="AnimObject",name=name,position=pos,scale=1,
+            properties={object_Model=asset.model_path,bSaved_by_game=false,
+                Animation={Animation=animation,Speed=1,bLoop=true,bPlaying=animation~="",bAlwaysUpdate=true,
+                    playerAnimationState="",bPhysicalizeAfterAnimation=false,bResetOnUnslaved=false,BlendTime=0},
+                Physics={bArticulated=false,bRigidBody=false,bPushableByPlayers=false,bBulletCollisionEnabled=true},
+                MultiplayerOptions={bNetworked=false}}})
+    else
+        entity=System.SpawnEntity({class="BasicEntity",name=name,position=pos,scale=1,
+            properties={object_Model=asset.model_path,bCanTriggerAreas=false,bSaved_by_game=false,
+                Physics={bPhysicalize=true,bRigidBody=false,bPushableByPlayers=false,Mass=0,Density=0},
+                MultiplayerOptions={bNetworked=false}}})
+    end
     if not entity or not entity.id then return self:Log("Engine rejected spawn: " .. asset.model_path) end
     -- Store both ID and object identity/name; ID reuse must never delete unrelated entities.
     local entry={id=entity.id,entity=entity,name=name,asset=asset,

@@ -41,7 +41,7 @@ def compiled_models(workspace: Path) -> list[tuple[str, str, str]]:
     result = []
     for asset in list_workspace_assets(workspace):
         folder = Path(asset.workspace_dir)
-        models = models_in(folder)
+        models = models_in(folder, (".cgf",))
         for game_path in models:
             result.append((asset.asset_id, f"{asset.name}  ({Path(game_path).name})", item_model_path(game_path)))
         if models:

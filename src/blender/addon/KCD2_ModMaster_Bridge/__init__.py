@@ -12,7 +12,7 @@ import bpy
 bl_info = {
     "name": "KCD2 ModMaster Bridge",
     "author": "PAWSKI",
-    "version": (1, 2, 0),
+    "version": (1, 3, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > KCD2 ModMaster",
     "description": "Seamless one-click bridge between KCD2 ModMaster and Blender.",

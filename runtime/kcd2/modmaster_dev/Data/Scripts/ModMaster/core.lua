@@ -1,4 +1,4 @@
-ModMasterDev = {version="0.5.3", registryVersion=1, opened=false, assets={},
+ModMasterDev = {version="0.5.4", registryVersion=1, opened=false, assets={},
     spawns={}, selected=1, spawnSelected=1, tab="ASSETS", search="", category="", modFilter="",
     serial=0, timer=nil, message="Runtime loaded; in-game acceptance pending", locations={},
     settings={hotkey="f5",keyCode=116,noclipHotkey="f4",hudEnabled=true,freecamSpeed=5.0,fastMult=4.0,slowMult=0.25}}
@@ -58,7 +58,8 @@ function ModMasterDev:LoadRegistry()
                 reject("Registry entry skipped (" .. mod.id .. ":" .. tostring(asset.id) .. "): unsupported spawn_type")
             elseif asset.spawn_type == "static_prop" and (type(asset.model_path) ~= "string" or
                 asset.model_path:find("..", 1, true) or asset.model_path:find(":", 1, true) or
-                asset.model_path:sub(1,1) == "/" or asset.model_path:lower():sub(-4) ~= ".cgf") then
+                asset.model_path:sub(1,1) == "/" or
+                (asset.model_path:lower():sub(-4) ~= ".cgf" and asset.model_path:lower():sub(-4) ~= ".cdf")) then
                 reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): unsafe/invalid model_path")
             elseif asset.spawn_type == "inventory_item" and (type(asset.item_guid) ~= "string" or
                 not asset.item_guid:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$")) then

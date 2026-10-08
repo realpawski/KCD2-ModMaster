@@ -103,3 +103,50 @@ def test_uncompiled_asset_blocks_build_with_a_clear_message(manager):
     project.assign_asset("boar_hat")
     with pytest.raises(ValueError, match="Boar with hat has no compiled model yet"):
         manager.build_project(project)
+
+
+def fake_skin_with_bones(bones):
+    record = b""
+    for name, rows in bones.items():
+        bone = bytearray(584)
+        bone[296:296 + 48] = struct.pack("<12f", *rows)
+        bone[344:344 + len(name)] = name.encode()
+        record += bytes(bone)
+    table = 16
+    return b"CrCh" + struct.pack("<III", 0x746, 1, table) + struct.pack("<HHIII", 0x2000, 0x800, 1, len(record), 32) + record
+
+
+def test_reads_game_bone_matrices():
+    root = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
+    head = [0, 0, 1, 0, 0.844, 0.537, 0, 0.542, -0.537, 0.844, 0, 0.577]
+    bones = cry_compile().read_bone_matrices(fake_skin_with_bones({"Animal_Pig": root, "Head": head}))
+    assert list(bones) == ["Animal_Pig", "Head"]
+    assert bones["Head"][7] == pytest.approx(0.542) and bones["Animal_Pig"] == root
+
+
+def test_character_definition_points_at_game_skeleton(tmp_path):
+    cc = cry_compile()
+    path = cc.write_cdf(tmp_path / "boar.cdf", "objects/characters/animals/boar/skeleton_pig_01.chr",
+                        "Objects/modmaster/boar/boar.skin", "Objects/modmaster/boar/boar.mtl")
+    root = ET.parse(path).getroot()
+    assert root.find("Model").get("File").endswith("skeleton_pig_01.chr")
+    attachment = root.find("AttachmentList/Attachment")
+    assert attachment.get("Type") == "CA_SKIN" and attachment.get("Binding").endswith("boar.skin")
+
+
+def test_rigged_asset_is_packed_as_animated_character(manager):
+    folder = manager.workspace / "Assets" / "pig"
+    (folder / "metadata").mkdir(parents=True)
+    (folder / "metadata" / ".modmaster_asset.json").write_text(json.dumps(
+        {"asset_id": "pig", "asset_name": "Pig", "workspace_dir": str(folder)}), encoding="utf-8")
+    base = folder / "compiled" / "Objects" / "modmaster" / "pig"
+    base.mkdir(parents=True)
+    (base / "pig.skin").write_bytes(b"CrCh")
+    cry_compile().write_cdf(base / "pig.cdf", "objects/x/skeleton.chr", "Objects/modmaster/pig/pig.skin",
+                            "Objects/modmaster/pig/pig.mtl")
+    assert compiled_models(folder) == ["Objects/modmaster/pig/pig.cdf"]
+    assert compiled_models(folder, (".cgf",)) == []
+    project = ModManager(manager.workspace).create_mod("Pigs", "pigs")
+    project.assign_asset("pig")
+    entry = json.loads((manager.build_project(project) / "modmaster_assets.json").read_text())["assets"][0]
+    assert entry["model_path"] == "Objects/modmaster/pig/pig.cdf" and "animation" in entry

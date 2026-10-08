@@ -174,8 +174,9 @@ class WorkspaceAssetsPage(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem(", ".join(self.owners.get(a.asset_id, [])) or "—"))
             has_blend = bool(a.blend_file and Path(a.blend_file).is_file())
             self.table.setItem(row, 4, QTableWidgetItem("Yes" if has_blend else "No"))
-            if compiled_models(Path(a.workspace_dir)):
-                export = "Compiled (.cgf)"
+            models = compiled_models(Path(a.workspace_dir))
+            if models:
+                export = "Rigged (.skin)" if any(m.lower().endswith(".cdf") for m in models) else "Compiled (.cgf)"
             elif a.export_file and Path(a.export_file).is_file():
                 export = "GLB only"
             else:
