@@ -199,6 +199,12 @@ function ModMasterDev:FollowTick(entity,asset,tick)
         local dx,dy=b.x-a.x,b.y-a.y
         local dist=math.sqrt(dx*dx+dy*dy)
         local actor=entity.actor
+        if tick<=2 and not self.followProbed then
+            self.followProbed=true
+            self:Log(string.format("%s follow tools: actor=%s SetMovementTarget=%s AI.GoTo=%s",asset.name,
+                tostring(actor~=nil),tostring(actor~=nil and actor.SetMovementTarget~=nil),
+                tostring(type(ai)=="table" and ai.GoTo~=nil)))
+        end
         if dist>5 and actor and actor.SetMovementTarget then
             -- Walk, or run when far behind, to a spot a few metres from Henry on the creature's side.
             local target={x=a.x+dx/dist*3,y=a.y+dy/dist*3,z=a.z}

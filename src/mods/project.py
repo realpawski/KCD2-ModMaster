@@ -35,6 +35,7 @@ class ModProject:
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     project_dir: str = ""
+    build_digest: str = ""  # content of the last build, so a changed mod gets a new version
 
     @classmethod
     def load(cls, project_dir: Path) -> ModProject | None:
@@ -53,6 +54,7 @@ class ModProject:
                 created_at=data.get("created_at", time.time()),
                 updated_at=data.get("updated_at", time.time()),
                 project_dir=str(project_dir),
+                build_digest=data.get("build_digest", ""),
             )
         except Exception as e:
             log.warning("Could not load mod project from %s: %s", project_dir, e)
@@ -81,6 +83,14 @@ class ModProject:
         if asset_id in self.assets:
             self.assets.remove(asset_id)
             self.save()
+
+
+def next_patch_version(version: str) -> str:
+    """0.1.0 -> 0.1.1; a version without a trailing number gets .1 appended."""
+    match = re.search(r"(\d+)(?!.*\d)", version)
+    if not match:
+        return f"{version}.1" if version else "0.1.1"
+    return version[:match.start()] + str(int(match.group(1)) + 1) + version[match.end():]
 
 
 class ModManager:

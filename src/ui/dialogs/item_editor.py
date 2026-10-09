@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 
 from PySide6.QtCore import QLocale, Qt, QTimer
@@ -213,6 +214,7 @@ class ItemEditorDialog(QDialog):
         self._validate_timer = QTimer(self, singleShot=True, interval=150)
         self._validate_timer.timeout.connect(self._validate)
         self._validate()
+        self._clean = self._snapshot()
 
 
     def _build_header(self) -> QHBoxLayout:
@@ -503,6 +505,10 @@ class ItemEditorDialog(QDialog):
         self._validate()
 
     def _collect(self) -> GameItemDefinition:
+        # A number typed without Enter or leaving the field is still only text; take what the user sees.
+        for editor in self.editors.values():
+            if isinstance(editor.widget, (QSpinBox, QDoubleSpinBox)):
+                editor.widget.interpretText()
         item = self.item
         item.display_name = self.txt_display.text().strip()
         item.description = self.txt_description.toPlainText().strip()
@@ -568,6 +574,24 @@ class ItemEditorDialog(QDialog):
             if name in self.base.attrs:
                 editor.set_value(self.base.attrs[name])
         self._validate()
+
+    def _snapshot(self) -> str:
+        data = self._collect().to_dict()
+        data.pop("updated_at", None)
+        return json.dumps(data, sort_keys=True)
+
+    def reject(self) -> None:
+        # Closing with Esc or the window button used to drop typed values without a word.
+        if self.saved is None and self._snapshot() != self._clean:
+            answer = QMessageBox.question(
+                self, "Unsaved changes", f"Save your changes to {self.item.display_name or self.item.name}?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
+            if answer == QMessageBox.Cancel:
+                return
+            if answer == QMessageBox.Save:
+                self._save()
+                return
+        super().reject()
 
     def _save(self) -> None:
         issues = self._validate()

@@ -263,3 +263,30 @@ def test_menu_mod_ships_full_character_tables_with_installed_looks(tmp_path, mon
 def test_health_range_is_enforced(value):
     c = CreatureDefinition("b", "B", "Boar", health=value)
     assert any(s == generator.ERROR for s, _n, _m in generator.validate([c], BODIES, {}))
+
+
+def test_mod_version_rises_only_when_its_content_changes(tmp_path, monkeypatch):
+    from mods.project import next_patch_version
+
+    assert next_patch_version("0.1.0") == "0.1.1" and next_patch_version("1.9") == "1.10"
+    assert next_patch_version("beta") == "beta.1"
+    game = tmp_path / "game"
+    (game / "Data").mkdir(parents=True)
+    (game / "Bin").mkdir()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    manager = RuntimeManager(game, workspace)
+    monkeypatch.setattr(manager, "creature_bodies", lambda: BODIES)
+    project = ModManager(workspace).create_mod("Beasts", "beasts")
+    store = CreatureStore(project)
+    store.save(CreatureDefinition("boar", "Boar", "Boar", soul_guid="11111111-0000-0000-0000-00000000000b"))
+    manager.build_project(project)
+    assert project.version == "0.1.0"  # the first build only remembers the content
+    manager.build_project(project)
+    assert project.version == "0.1.0"
+    store.save(CreatureDefinition("boar", "Boar", "Boar", soul_guid="11111111-0000-0000-0000-00000000000b", health=300))
+    built = manager.build_project(project)
+    assert project.version == "0.1.1"
+    assert ModManager(workspace).get_mod("beasts").version == "0.1.1"
+    assert 'version="0.1.1"' in (built / "mod.manifest").read_text() or "0.1.1" in (built / "mod.manifest").read_text()
+    assert json.loads((built / "modmaster_assets.json").read_text())["version"] == "0.1.1"

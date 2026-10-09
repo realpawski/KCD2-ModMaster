@@ -217,6 +217,40 @@ def _original_bones(meta: dict) -> dict:
     return bones
 
 
+class _BakedCopies:
+    """Copies of the meshes with modifiers and world transform (in game orientation) baked into the vertices.
+
+    rc keeps each object's geometry relative to its own origin and drops where the object sits, so a model
+    moved in the scene would come out unmoved. Baking makes the world origin the model's origin.
+    """
+
+    def __init__(self, context, objects: list):
+        self.context = context
+        self.objects = objects
+        self.copies: list = []
+
+    def __enter__(self) -> list:
+        depsgraph = self.context.evaluated_depsgraph_get()
+        for obj in self.objects:
+            mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(depsgraph), preserve_all_data_layers=True,
+                                                   depsgraph=depsgraph)
+            matrix = dae_export.TO_GAME @ obj.matrix_world
+            mesh.transform(matrix)
+            if matrix.determinant() < 0:
+                mesh.flip_normals()
+            copy = bpy.data.objects.new(obj.name + "_kcd2_export", mesh)
+            self.context.scene.collection.objects.link(copy)
+            self.copies.append(copy)
+        return self.copies
+
+    def __exit__(self, *_exc):
+        for copy in self.copies:
+            mesh = copy.data
+            bpy.data.objects.remove(copy, do_unlink=True)
+            if mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
+
+
 class _GameOrientation:
     """Turns the meshes back into game orientation for the duration of an export."""
 
@@ -371,13 +405,13 @@ class KCD2_OT_export_cgf(bpy.types.Operator):
 
     def _export_static(self, context, meshes, asset_id, rc, work, compiled, model, tex_virtual, mtl_path):
         fbx = work / f"{asset_id}.fbx"
-        bpy.ops.object.select_all(action="DESELECT")
-        for obj in meshes:
-            obj.select_set(True)
-        context.view_layer.objects.active = meshes[0]
-        with _GameOrientation(meshes):
+        with _BakedCopies(context, meshes) as copies:
+            bpy.ops.object.select_all(action="DESELECT")
+            for obj in copies:
+                obj.select_set(True)
+            context.view_layer.objects.active = copies[0]
             bpy.ops.export_scene.fbx(filepath=str(fbx), use_selection=True, object_types={"MESH"},
-                                     use_mesh_modifiers=True, mesh_smooth_type="FACE",
+                                     use_mesh_modifiers=False, mesh_smooth_type="FACE",
                                      apply_scale_options="FBX_SCALE_UNITS", add_leaf_bones=False,
                                      bake_anim=False, path_mode="STRIP")
         subs = cry_compile.compile_model(rc, fbx, compiled / f"{model}.cgf", model)

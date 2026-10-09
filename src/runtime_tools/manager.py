@@ -567,11 +567,13 @@ class RuntimeManager:
         with tempfile.TemporaryDirectory(dir=build_parent) as tmp:
             built = Path(tmp) / project.id
             built.mkdir()
-            write_manifest(built / "mod.manifest", project)
             pack_data(root / "game", built / f"Data/{project.id}.pak", extra)
             if items:
                 from items.generator import build_localization_pak
                 build_localization_pak(items, built / "Localization" / "English_xml.pak", project.id)
+            self._version_for_content(project, built, entry)
+            entry["version"] = project.version
+            write_manifest(built / "mod.manifest", project)
             (built / "modmaster_assets.json").write_text(json.dumps(entry, indent=2), encoding="utf-8")
             self._write_marker(built, project.id, project.version)
             destination = build_parent / project.id
@@ -581,6 +583,26 @@ class RuntimeManager:
             shutil.copytree(built, destination)
         self._audit("project_built", modid=project.id, assets=len(assets), items=len(items))
         return destination
+
+    @staticmethod
+    def _version_for_content(project, built: Path, entry: dict) -> None:
+        """Raises the patch version when the mod's content differs from its last build."""
+        from mods.project import next_patch_version
+
+        digest = hashlib.sha256()
+        for pak in sorted(built.rglob("*.pak")):
+            digest.update(pak.relative_to(built).as_posix().encode())
+            digest.update(pak.read_bytes())
+        digest.update(json.dumps({k: v for k, v in entry.items() if k != "version"}, sort_keys=True).encode())
+        content = digest.hexdigest()
+        previous = getattr(project, "build_digest", "")
+        if content == previous:
+            return
+        if previous and hasattr(project, "save"):
+            project.version = next_patch_version(project.version)
+        project.build_digest = content
+        if hasattr(project, "save"):
+            project.save()
 
     def build_install(self, project) -> Path:
         built = self.build_project(project)
