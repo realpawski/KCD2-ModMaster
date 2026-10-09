@@ -29,6 +29,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.tasks import Task
+from creatures.model import CreatureDefinition, attitude
+from creatures.store import CreatureStore
 from items.fields import field_info, headline_stats, type_label
 from items.gamedata import GameDataUnavailable
 from items.models import MODE_OVERRIDE, new_guid
@@ -39,6 +41,7 @@ from runtime_tools.manager import RuntimeManager
 from ui import theme
 from ui.context import AppContext
 from ui.dialogs.create_mod_dialog import CreateModDialog
+from ui.dialogs.creature_editor import CreatureEditorDialog, ModelOption
 from ui.dialogs.item_editor import ItemEditorDialog
 from ui.dialogs.new_item_dialog import NewItemDialog
 from ui.widgets import (
@@ -131,9 +134,14 @@ class ModWorkspace(QWidget):
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
-        self.tabs.addTab(self._build_items_tab(), "Items")
-        self.tabs.addTab(self._build_assets_tab(), "Assets")
-        self.tabs.addTab(self._build_log_tab(), "Build log")
+        self.tab_items = self._build_items_tab()
+        self.tab_creatures = self._build_creatures_tab()
+        self.tab_assets = self._build_assets_tab()
+        self.tab_log = self._build_log_tab()
+        self.tabs.addTab(self.tab_items, "Items")
+        self.tabs.addTab(self.tab_creatures, "Creatures")
+        self.tabs.addTab(self.tab_assets, "Assets")
+        self.tabs.addTab(self.tab_log, "Build log")
         lay.addWidget(self.tabs, 1)
 
 
@@ -357,7 +365,7 @@ class ModWorkspace(QWidget):
             self.table_assets.setItem(r, 0, name)
             self.table_assets.setItem(r, 1, QTableWidgetItem(asset.asset_type if asset else "—"))
             self.table_assets.setItem(r, 2, QTableWidgetItem(asset.status.title() if asset else "Missing"))
-        self.tabs.setTabText(1, f"Assets  {len(ids)}")
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_assets), f"Assets  {len(ids)}")
         self.btn_unassign.setEnabled(False)
 
     def _assign_menu(self) -> None:
@@ -382,6 +390,135 @@ class ModWorkspace(QWidget):
             self.load(self.mod)
             self.page.refresh_list(keep=self.mod.id)
 
+
+    def _build_creatures_tab(self) -> QWidget:
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setContentsMargins(0, 12, 0, 0)
+        lay.setSpacing(10)
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
+        bar.addWidget(label("NPCs and animals with their own look, behaviour and strength. They appear in the "
+                            "in-game menu after Build & install.", "Dim"))
+        bar.addStretch(1)
+        self.btn_edit_creature = button("Edit", "pencil")
+        self.btn_edit_creature.clicked.connect(self._edit_creature)
+        self.btn_dup_creature = button("Duplicate", "document-duplicate")
+        self.btn_dup_creature.clicked.connect(self._duplicate_creature)
+        self.btn_del_creature = button("Delete", "trash", "Danger")
+        self.btn_del_creature.clicked.connect(self._delete_creature)
+        self.btn_add_creature = button("Add creature", "plus", "Primary")
+        self.btn_add_creature.clicked.connect(self._add_creature)
+        for b in (self.btn_edit_creature, self.btn_dup_creature, self.btn_del_creature, self.btn_add_creature):
+            bar.addWidget(b)
+        lay.addLayout(bar)
+        self.creatures_stack = QStackedWidget()
+        self.table_creatures = QTableWidget(0, 5)
+        self.table_creatures.setHorizontalHeaderLabels(["Creature", "Body", "Behaviour", "Strength", "Look"])
+        configure_table(self.table_creatures, stretch_column=4, row_height=40)
+        self.table_creatures.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table_creatures.itemSelectionChanged.connect(self._update_creature_buttons)
+        self.table_creatures.doubleClicked.connect(lambda _: self._edit_creature())
+        self.creatures_stack.addWidget(self.table_creatures)
+        empty = EmptyState("sparkles", "No creatures yet",
+                           "Make a wolf that guards a camp, a boar with your own model, or a villager who "
+                           "fights on Henry's side.")
+        add = button("Add creature", "plus", "Primary")
+        add.clicked.connect(self._add_creature)
+        empty.actions.addWidget(add)
+        self.creatures_stack.addWidget(empty)
+        lay.addWidget(self.creatures_stack, 1)
+        return tab
+
+    def _creature_store(self) -> CreatureStore:
+        return CreatureStore(self.mod)
+
+    def _fill_creatures(self) -> None:
+        if not self.mod:
+            return
+        self.creatures = self._creature_store().list()
+        self.table_creatures.setRowCount(len(self.creatures))
+        for r, c in enumerate(self.creatures):
+            name = QTableWidgetItem(c.name)
+            name.setData(Qt.UserRole, c.creature_id)
+            self.table_creatures.setItem(r, 0, name)
+            self.table_creatures.setItem(r, 1, QTableWidgetItem(c.base_class))
+            self.table_creatures.setItem(r, 2, QTableWidgetItem(attitude(c.base_class, c.attitude).label))
+            stats = "  ".join(f"{k[:3].title()} {v}" for k, v in c.stats().items())
+            self.table_creatures.setItem(r, 3, QTableWidgetItem(f"{c.health} HP  {stats}".strip()))
+            self.table_creatures.setItem(r, 4, QTableWidgetItem(c.model_path or "Game look"))
+        self.creatures_stack.setCurrentIndex(0 if self.creatures else 1)
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_creatures), f"Creatures  {len(self.creatures)}")
+        self._update_creature_buttons()
+
+    def _update_creature_buttons(self) -> None:
+        selected = self._selected_creature() is not None
+        for b in (self.btn_edit_creature, self.btn_dup_creature, self.btn_del_creature):
+            b.setEnabled(selected)
+
+    def _selected_creature(self) -> CreatureDefinition | None:
+        rows = self.table_creatures.selectionModel().selectedRows()
+        if not rows:
+            return None
+        cid = self.table_creatures.item(rows[0].row(), 0).data(Qt.UserRole)
+        return next((c for c in self.creatures if c.creature_id == cid), None)
+
+    def _creature_data(self):
+        if not self.ctx.settings.game_dir:
+            QMessageBox.warning(self, "Game folder missing", "Set the Kingdom Come: Deliverance II folder in Settings.")
+            return None
+        manager = RuntimeManager(Path(self.ctx.settings.game_dir), self.ctx.settings.workspace)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            bodies = manager.creature_bodies()
+            skeletons = manager.model_skeletons()
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Game data unavailable", str(exc))
+            return None
+        finally:
+            QApplication.restoreOverrideCursor()
+        names = {a.asset_id: a.name for a in list_workspace_assets(self.ctx.settings.workspace)}
+        models = []
+        for path, skeleton in sorted(skeletons.items()):
+            asset_id = path.split("/")[2] if path.lower().startswith("objects/modmaster/") else ""
+            models.append(ModelOption(asset_id, names.get(asset_id, asset_id or path), path, skeleton))
+        return bodies, models
+
+    def _open_creature(self, creature: CreatureDefinition) -> None:
+        data = self._creature_data()
+        if not data:
+            return
+        dlg = CreatureEditorDialog(creature, *data, parent=self)
+        if dlg.exec() == QDialog.Accepted and dlg.saved:
+            self._creature_store().save(dlg.saved)
+            self._fill_creatures()
+
+    def _add_creature(self) -> None:
+        if not self.mod:
+            return
+        store = self._creature_store()
+        self._open_creature(CreatureDefinition(store.unique_id("new_creature"), "New creature"))
+
+    def _edit_creature(self) -> None:
+        creature = self._selected_creature()
+        if creature:
+            self._open_creature(creature)
+
+    def _duplicate_creature(self) -> None:
+        creature = self._selected_creature()
+        if not creature:
+            return
+        copy_ = CreatureDefinition(**{**creature.__dict__})
+        copy_.creature_id = self._creature_store().unique_id(creature.creature_id + "_copy")
+        copy_.name = creature.name + " (copy)"
+        copy_.soul_guid = CreatureDefinition("x", "x").soul_guid
+        self._open_creature(copy_)
+
+    def _delete_creature(self) -> None:
+        creature = self._selected_creature()
+        if creature and QMessageBox.question(self, "Delete creature", f"Delete {creature.name}?") == QMessageBox.Yes:
+            self._creature_store().delete(creature)
+            self._fill_creatures()
 
     def _build_log_tab(self) -> QWidget:
         tab = QWidget()
@@ -412,7 +549,7 @@ class ModWorkspace(QWidget):
         manager = RuntimeManager(Path(self.ctx.settings.game_dir), self.ctx.settings.workspace)
         mod = self.mod
         self._set_busy(True)
-        self.tabs.setCurrentIndex(2)
+        self.tabs.setCurrentWidget(self.tab_log)
         self._log(f"{'Building and installing' if install else 'Building'} {mod.name} {mod.version}…")
 
         def work(_ctx):
@@ -471,6 +608,7 @@ class ModWorkspace(QWidget):
             self.txt_log.clear()
             self.txt_item_filter.clear()
         self._fill_items()
+        self._fill_creatures()
         self._fill_assets()
 
 

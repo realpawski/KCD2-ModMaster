@@ -5,7 +5,7 @@ import logging
 import subprocess
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMenu,
     QMessageBox,
+    QPushButton,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -25,21 +26,15 @@ from compiler import compiled_models
 from mods.project import ModManager
 from ui import theme
 from ui.context import AppContext
+from ui.dialogs.asset_status_dialog import STATUS_TEXT, AssetStatusDialog
 from ui.dialogs.new_asset_wizard import NewAssetWizard
-from ui.widgets import EmptyState, PageHeader, button, configure_table, label, page_layout, set_cell_pill
+from ui.widgets import EmptyState, PageHeader, button, configure_table, label, page_layout
 from utils.helpers import reveal_in_explorer
 from workspace.asset_model import AssetStatus, WorkspaceAsset, list_workspace_assets, validate_workspace_asset
 
 log = logging.getLogger(__name__)
 
-STATUS_STATE = {
-    AssetStatus.READY.value: "ok",
-    AssetStatus.BUILT.value: "info",
-    AssetStatus.INSTALLED.value: "ok",
-    AssetStatus.WARNING.value: "warn",
-    AssetStatus.INVALID.value: "error",
-    AssetStatus.EDITING.value: "muted",
-}
+STATUS_COLORS = {"ok": theme.OK, "warn": theme.WARN, "error": theme.ERR, "muted": theme.TEXT_MUTED}
 
 
 class WorkspaceAssetsPage(QWidget):
@@ -49,6 +44,7 @@ class WorkspaceAssetsPage(QWidget):
         self.bridge_mgr = BlenderBridgeManager.get_instance(self.ctx.settings)
         self.assets: list[WorkspaceAsset] = []
         self.owners: dict[str, list[str]] = {}
+        self.reports: dict = {}
 
         lay = page_layout(self)
         header = PageHeader("Workspace Assets",
@@ -131,6 +127,8 @@ class WorkspaceAssetsPage(QWidget):
         for mod in mods:
             for asset_id in mod.assets:
                 self.owners.setdefault(asset_id, []).append(mod.name)
+        # Status is derived from the files on disk each time, so it never shows an outdated state.
+        self.reports = {a.asset_id: validate_workspace_asset(a, self.owners.get(a.asset_id, [])) for a in self.assets}
         current = self.cb_mod_filter.currentData()
         self.cb_mod_filter.blockSignals(True)
         self.cb_mod_filter.clear()
@@ -170,7 +168,7 @@ class WorkspaceAssetsPage(QWidget):
             name.setToolTip(a.workspace_dir)
             self.table.setItem(row, 0, name)
             self.table.setItem(row, 1, QTableWidgetItem(a.asset_type))
-            set_cell_pill(self.table, row, 2, a.status.title(), STATUS_STATE.get(a.status, "muted"))
+            self._status_cell(row, a)
             self.table.setItem(row, 3, QTableWidgetItem(", ".join(self.owners.get(a.asset_id, [])) or "—"))
             has_blend = bool(a.blend_file and Path(a.blend_file).is_file())
             self.table.setItem(row, 4, QTableWidgetItem("Yes" if has_blend else "No"))
@@ -183,6 +181,52 @@ class WorkspaceAssetsPage(QWidget):
                 export = "Not exported"
             self.table.setItem(row, 5, QTableWidgetItem(export))
         self._set_actions_enabled(False)
+
+    def _status_cell(self, row: int, asset: WorkspaceAsset) -> None:
+        text, state = STATUS_TEXT.get(asset.status, (asset.status.title(), "muted"))
+        todo = sum(1 for i in self.reports[asset.asset_id].issues if i.severity != "info")
+        pill = QPushButton(f"{text}  ·  {todo} to do" if todo else text)
+        pill.setCursor(Qt.PointingHandCursor)
+        pill.setToolTip("Show what this asset still needs")
+        pill.setStyleSheet(theme.pill(STATUS_COLORS[state]))
+        pill.clicked.connect(lambda _=False, a=asset: self._show_status(a))
+        holder = QWidget()
+        lay = QHBoxLayout(holder)
+        lay.setContentsMargins(8, 0, 8, 0)
+        lay.addWidget(pill)
+        lay.addStretch(1)
+        self.table.setCellWidget(row, 2, holder)
+        item = QTableWidgetItem()
+        item.setData(Qt.SizeHintRole, QSize(holder.sizeHint().width() + 28, 0))
+        self.table.setItem(row, 2, item)
+
+    def _show_status(self, asset: WorkspaceAsset) -> None:
+        self._select_asset(asset.asset_id)
+        dlg = AssetStatusDialog(asset, self.reports[asset.asset_id], self)
+
+        def act(action: str) -> None:
+            dlg.accept()
+            if action == "open_blender":
+                self._open_selected_in_blender()
+            elif action == "add_to_mod":
+                self._add_to_mod_menu()
+
+        def recheck() -> None:
+            dlg.accept()
+            self.refresh()
+            fresh = next((a for a in self.assets if a.asset_id == asset.asset_id), None)
+            if fresh:
+                self._show_status(fresh)
+
+        dlg.action_requested.connect(act)
+        dlg.recheck_requested.connect(recheck)
+        dlg.exec()
+
+    def _select_asset(self, asset_id: str) -> None:
+        for r in range(self.table.rowCount()):
+            if self.table.item(r, 0).data(Qt.UserRole) == asset_id:
+                self.table.selectRow(r)
+                return
 
     def _on_selection_changed(self) -> None:
         self._set_actions_enabled(self._get_selected_asset() is not None)
@@ -226,12 +270,11 @@ class WorkspaceAssetsPage(QWidget):
         asset = self._get_selected_asset()
         if not asset:
             return
-        report = validate_workspace_asset(asset)
-        asset.save()
-        lines = [f"{i.severity.title()}: {i.message}" for i in report.issues] or ["No issues found."]
-        box = QMessageBox.information if report.is_valid else QMessageBox.warning
-        box(self, f"Validation — {asset.name}", "\n".join(lines))
         self.refresh()
+        fresh = next((a for a in self.assets if a.asset_id == asset.asset_id), None)
+        if fresh:
+            fresh.save()
+            self._show_status(fresh)
 
     def _add_to_mod_menu(self) -> None:
         asset = self._get_selected_asset()

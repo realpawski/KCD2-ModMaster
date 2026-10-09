@@ -58,6 +58,12 @@ function ModMasterDev:LoadRegistry()
                 asset.soul_guid:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$")) or
                 (type(asset.archetype) == "string" and asset.archetype:match("^[%w_]+$"))) then
                 reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): soul needs a GUID or archetype")
+            elseif asset.spawn_type == "soul" and asset.model_path ~= nil and not (type(asset.model_path) == "string" and
+                asset.model_path:lower():sub(-4) == ".cdf" and not asset.model_path:find("..", 1, true) and
+                not asset.model_path:find(":", 1, true) and asset.model_path:sub(1,1) ~= "/") then
+                reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): creature model must be a .cdf")
+            elseif asset.spawn_type == "soul" and not self:ValidCreatureValues(asset) then
+                reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): invalid health or stats")
             elseif asset.spawn_type == "soul" and asset.entity_class ~= nil and
                 not (type(asset.entity_class) == "string" and asset.entity_class:match("^[%w_]+$")) then
                 reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): invalid entity_class")
@@ -94,6 +100,18 @@ function ModMasterDev:LoadRegistry()
     self:Log(string.format(
         "[RUNTIME REGISTRY] Total Entries: %d | Spawnable: %d | Vanilla: %d | Custom: %d | Unsupported: %d | Categories: %s",
         #assets + counts.unsupported, #assets, counts.vanilla, counts.custom, counts.unsupported, table.concat(catList, ", ")))
+    return true
+end
+
+function ModMasterDev:ValidCreatureValues(asset)
+    if asset.health ~= nil and (type(asset.health) ~= "number" or asset.health < 1 or asset.health > 10000) then return false end
+    if asset.stats == nil then return true end
+    if type(asset.stats) ~= "table" then return false end
+    for name, level in pairs(asset.stats) do
+        if (name ~= "strength" and name ~= "agility" and name ~= "vitality") or type(level) ~= "number" or level < 1 or level > 100 then
+            return false
+        end
+    end
     return true
 end
 

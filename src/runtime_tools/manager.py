@@ -333,12 +333,13 @@ class RuntimeManager:
             extra[inventory_preset_path(project.id)] = preset.encode("ascii")
         return items, extra
 
-    def _stage_compiled_assets(self, project, items) -> tuple[list[dict], dict[str, bytes]]:
+    def _stage_compiled_assets(self, project, items, creatures=()) -> tuple[list[dict], dict[str, bytes]]:
         from compiler import cdf_skeleton, compiled_files, compiled_models
         from workspace.asset_model import list_workspace_assets
 
         known = {a.asset_id: a for a in list_workspace_assets(self.workspace)}
         used_by_items = {i.workspace_asset_id for i in items if i.workspace_asset_id}
+        used_by_items |= {c.workspace_asset_id for c in creatures if c.workspace_asset_id}
         entries, extra = [], {}
         for asset_id in list(dict.fromkeys(list(project.assets) + sorted(used_by_items))):
             asset = known.get(asset_id)
@@ -407,6 +408,38 @@ class RuntimeManager:
             log.warning("Animations of %s unavailable: %s", skeleton, exc)
             return ""
 
+    def creature_bodies(self) -> dict:
+        from creatures.gamedata import load_bodies
+        return {b.entity_class: b for b in load_bodies(self.game, self.workspace / "cache" / "creature_bodies.json")}
+
+    def model_skeletons(self) -> dict[str, str]:
+        """Compiled .cdf game path -> skeleton, for every workspace asset."""
+        from compiler import cdf_skeleton, compiled_models
+
+        result = {}
+        assets = self.workspace / "Assets"
+        for asset_dir in sorted(assets.iterdir()) if assets.is_dir() else []:
+            for model in compiled_models(asset_dir, kinds=(".cdf",)):
+                result[model] = self._skeleton(cdf_skeleton(asset_dir / "compiled" / model))
+        return result
+
+    def _stage_creatures(self, project) -> tuple[list, list[dict], dict[str, bytes]]:
+        from creatures import generator
+        from creatures.store import CreatureStore
+
+        creatures = CreatureStore(project).list()
+        if not creatures:
+            return [], [], {}
+        bodies = self.creature_bodies()
+        issues = generator.validate(creatures, bodies, self.model_skeletons())
+        errors = [f"  - {name}: {message}" for severity, name, message in issues if severity == generator.ERROR]
+        if errors:
+            raise ValueError("Creature check failed:\n" + "\n".join(errors))
+        extra = {generator.soul_table_path(project.id):
+                 generator.generate_soul_xml(project.id, creatures, bodies).encode("ascii")}
+        entries = [generator.registry_entry(project.id, c, bodies[c.base_class]) for c in creatures]
+        return creatures, entries, extra
+
     @staticmethod
     def _item_registry_entry(item) -> dict:
         from items.fields import RUNTIME_CATEGORY
@@ -418,9 +451,11 @@ class RuntimeManager:
     def build_project(self, project) -> Path:
         mod_id(project.id)
         items, extra = self._stage_game_items(project)
-        props, compiled = self._stage_compiled_assets(project, items)
-        extra = {**compiled, **extra}
-        assets = read_spawn_descriptors(project) + props + [self._item_registry_entry(i) for i in items]
+        creatures, creature_entries, creature_files = self._stage_creatures(project)
+        props, compiled = self._stage_compiled_assets(project, items, creatures)
+        extra = {**compiled, **extra, **creature_files}
+        assets = (read_spawn_descriptors(project) + props + [self._item_registry_entry(i) for i in items]
+                  + creature_entries)
         entry = {"id": project.id, "name": project.name, "version": project.version, "assets": assets}
         root = Path(project.project_dir)
         if root.is_symlink() or root.is_junction():

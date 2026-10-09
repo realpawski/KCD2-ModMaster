@@ -111,36 +111,72 @@ function ModMasterDev:CopyTable(source,depth)
 end
 
 -- Entity classes read their soul from Properties; the class defaults keep model, navigation and AI setup intact.
-function ModMasterDev:SoulProperties(class,guid)
+function ModMasterDev:SoulProperties(class,guid,model)
     local script=rawget(_G,class)
     if type(script)~="table" or type(script.Properties)~="table" then return nil end
     local props=self:CopyTable(script.Properties,0)
     props.guidSharedSoulId=guid;props.sharedSoulGuid=guid;props.bSaved_by_game=false
+    if model then props.fileModel=model end
     return props
+end
+
+-- Creatures from a mod carry their own health and stats; the soul exists a moment after the spawn.
+function ModMasterDev:ApplyCreature(entity,asset)
+    if not asset.health and type(asset.stats)~="table" then return end
+    local function apply()
+        local soul=entity.soul
+        if not soul then return self:Log(asset.name .. ": no soul, stats not applied") end
+        local done={}
+        for stat,level in pairs(asset.stats or {}) do
+            if pcall(soul.SetStatLevel,soul,stat,level) then table.insert(done,stat .. " " .. level) end
+        end
+        if asset.health then
+            if entity.actor and entity.actor.SetMaxHealth then pcall(entity.actor.SetMaxHealth,entity.actor,asset.health) end
+            pcall(soul.SetState,soul,"health",asset.health)
+            local ok,now=pcall(soul.GetState,soul,"health")
+            table.insert(done,"health " .. tostring(ok and now or "?") .. "/" .. asset.health)
+        end
+        self:Log(asset.name .. " stats: " .. table.concat(done,", "))
+    end
+    if Script and Script.SetTimer then Script.SetTimer(300,function() self:Guard(apply) end) else self:Guard(apply) end
+end
+
+function ModMasterDev:SpawnBody(class,name,pos,yaw,guid,model)
+    local function spec(props)
+        return {class=class,name=name,position=pos,orientation={x=-math.sin(yaw),y=math.cos(yaw),z=0},properties=props}
+    end
+    local props=self:SoulProperties(class,guid,model)
+    if props then
+        local ok,value=pcall(System.SpawnEntity,spec(props))
+        if ok and type(value)=="table" and value.id then return value,"soul " .. guid end
+        if not ok then return nil,nil,value end
+    end
+    -- Animals and horses bring a default soul archetype, so the plain class spawn still gives a living creature.
+    local ok,value=pcall(System.SpawnEntity,spec(nil))
+    if ok and type(value)=="table" and value.id then return value,"default soul" end
+    return nil,nil,not ok and value or nil
 end
 
 function ModMasterDev:SpawnSoul(asset,pos)
     local guid=asset.soul_guid or self:RandomSoul(asset.archetype)
     if not guid then return self:Log("No " .. tostring(asset.archetype) .. " souls in the registry") end
     local class=asset.entity_class or (asset.category=="npcs" and "NPC" or asset.archetype)
+    local model=type(asset.model_path)=="string" and asset.model_path~="" and asset.model_path or nil
     self.serial=self.serial+1
     local name="ModMasterSoul_" .. self.serial
     local yaw=0
     local okDir,dir=pcall(System.GetViewCameraDir)
     if okDir and type(dir)=="table" then yaw=math.atan2(-dir.x,dir.y)+math.pi end
-    local function spec(props)
-        return {class=class,name=name,position=pos,orientation={x=-math.sin(yaw),y=math.cos(yaw),z=0},properties=props}
-    end
     local entity,how,err
-    local props=self:SoulProperties(class,guid)
-    if props and System.SpawnEntity then
-        local ok,value=pcall(System.SpawnEntity,spec(props))
-        if ok and type(value)=="table" and value.id then entity,how=value,"soul " .. guid else err=not ok and value or err end
-    end
-    -- Animals and horses bring a default soul archetype, so the plain class spawn still gives a living creature.
-    if not entity and System.SpawnEntity then
-        local ok,value=pcall(System.SpawnEntity,spec(nil))
-        if ok and type(value)=="table" and value.id then entity,how=value,"default soul" else err=not ok and value or err end
+    if System.SpawnEntity then entity,how,err=self:SpawnBody(class,name,pos,yaw,guid,model) end
+    -- A mod's own soul only exists once the game loaded the mod's soul table; borrow a game soul otherwise.
+    if entity and asset.source=="compiled_custom" and not entity.soul then
+        local fallback=self:RandomSoul(asset.archetype)
+        if fallback and fallback~=guid then
+            pcall(System.RemoveEntity,entity.id)
+            entity,how,err=self:SpawnBody(class,name,pos,yaw,fallback,model)
+            how=(how or "") .. " (mod soul not loaded)"
+        end
     end
     local ai=rawget(_G,"XGenAIModule")
     if not entity and type(ai)=="table" and type(ai.SpawnEntity)=="function" then
@@ -149,6 +185,7 @@ function ModMasterDev:SpawnSoul(asset,pos)
     end
     if entity then
         self:Log(string.format("%s spawned via %s (class %s, has soul: %s)",asset.name,how,class,tostring(entity.soul~=nil)))
+        self:ApplyCreature(entity,asset)
         return self:TrackSoul(entity,name,asset,pos,yaw)
     end
     self:Log("Spawn of " .. asset.name .. " failed (class " .. class .. ", soul " .. guid .. ")" .. (err and (": " .. tostring(err)) or ""))
