@@ -209,23 +209,54 @@ def test_deleting_a_workspace_asset_moves_it_to_trash(tmp_path):
     assert (tmp_path / "Mods").is_dir()
 
 
+BOAR_DRESSED = BaseBody(**{**BOAR.__dict__, "clothing": {"Name": "boar", "Race": "Pig", "Gender": "NotDefined",
+                                                         "DefaultBody": "boar_body_boar",
+                                                         "Carcass": "carcass_body_boar"},
+                           "race": "Pig", "gender": "NotDefined", "equipment_part": "pig_torso"})
+GAME_CLOTHING = ('<database><ClothingConfigs version="1">\n\t\t<ClothingConfig Name="boar" DefaultBody="boar_body_boar" />'
+                 '\n\t</ClothingConfigs>\n</database>')
+GAME_COMPONENTS = ('<database><CharacterComponents version="6">\n\t\t<Component Name="Boar" Race="Pig" />'
+                   '\n\t</CharacterComponents>\n</database>')
+
+
 def test_custom_look_dresses_the_body_through_its_own_clothing_config():
-    boar = BaseBody(**{**BOAR.__dict__, "clothing": {"Name": "boar", "Race": "Pig", "Gender": "NotDefined",
-                                                      "DefaultBody": "boar_body_boar", "Carcass": "carcass_body_boar"},
-                       "race": "Pig", "gender": "NotDefined", "equipment_part": "pig_torso"})
-    c = CreatureDefinition("rain", "Raincoat Boar", "Boar", model_path=MODEL)
-    assert generator.custom_look(c, boar)
-    clothing = generator.generate_clothing_xml("m", [(c, boar)])
-    assert 'Name="m_rain"' in clothing and 'DefaultBody="m_rain_body"' in clothing
-    assert 'Carcass="carcass_body_boar"' in clothing and "boar_body_boar" not in clothing
-    component = generator.generate_component_xml("m", [(c, boar, "modmaster/m_rain/", "rain.skin", "rain.mtl")])
-    assert 'FilePath="modmaster/m_rain/"' in component and 'EquipmentPart="pig_torso"' in component
-    assert 'Model="rain.skin"' in component and 'Race="Pig"' in component
     import xml.etree.ElementTree as ET
-    ET.fromstring(clothing), ET.fromstring(component)
-    assert generator.registry_entry("m", c, boar)["clothing_config"] == "m_rain"
-    human = CreatureDefinition("guy", "Guy", "NPC", model_path=MODEL)
-    assert not generator.custom_look(human, boar)
+
+    c = CreatureDefinition("rain", "Raincoat Boar", "Boar", model_path=MODEL)
+    assert generator.custom_look(c, BOAR_DRESSED)
+    look = generator.look_rows("m", c, BOAR_DRESSED, "modmaster/m_rain/", "rain.skin", "rain.mtl")
+    assert 'Name="m_rain"' in look["clothing"] and 'DefaultBody="m_rain_body"' in look["clothing"]
+    assert 'Carcass="carcass_body_boar"' in look["clothing"] and "boar_body_boar" not in look["clothing"]
+    assert 'FilePath="modmaster/m_rain/"' in look["component"] and 'EquipmentPart="pig_torso"' in look["component"]
+    clothing, components = generator.merge_looks(GAME_CLOTHING, GAME_COMPONENTS, [look])
+    assert [c.get("Name") for c in ET.fromstring(clothing).iter("ClothingConfig")] == ["boar", "m_rain"]
+    assert [c.get("Name") for c in ET.fromstring(components).iter("Component")] == ["Boar", "m_rain"]
+    assert generator.registry_entry("m", c, BOAR_DRESSED)["clothing_config"] == "m_rain"
+    assert not generator.custom_look(CreatureDefinition("guy", "Guy", "NPC", model_path=MODEL), BOAR_DRESSED)
+    with pytest.raises(ValueError):
+        generator.merge_looks(GAME_CLOTHING, GAME_COMPONENTS, [{**look, "component": "<Soul/>"}])
+
+
+def test_menu_mod_ships_full_character_tables_with_installed_looks(tmp_path, monkeypatch):
+    game = tmp_path / "game"
+    (game / "Data").mkdir(parents=True)
+    (game / "Bin").mkdir()
+    with zipfile.ZipFile(game / "Data" / "Tables.pak", "w") as z:
+        z.writestr("Libs/Tables/Character/ClothingConfig.xml", GAME_CLOTHING)
+        z.writestr("Libs/Tables/Character/CharacterComponent.xml", GAME_COMPONENTS)
+    manager = RuntimeManager(game, tmp_path / "ws")
+    c = CreatureDefinition("rain", "Raincoat Boar", "Boar", model_path=MODEL)
+    look = generator.look_rows("m", c, BOAR_DRESSED, "modmaster/m_rain/", "rain.skin", "rain.mtl")
+    registry = {"format_version": 1, "runtime_version": "x", "mods": [{"id": "m", "assets": [], "looks": [look]}]}
+    built = manager.build_companion(registry)
+    with zipfile.ZipFile(built / "Data/modmaster_dev.pak") as z:
+        assert b'Name="m_rain"' in z.read("Libs/Tables/Character/ClothingConfig.xml")
+        assert b'Name="Boar"' in z.read("Libs/Tables/Character/CharacterComponent.xml")
+        assert b"<SkinElement" in z.read("Libs/Tables/Character/CharacterComponent.xml")
+        assert b"m_rain" not in z.read("Scripts/ModMaster/registry.lua")
+    plain = manager.build_companion({"format_version": 1, "runtime_version": "x", "mods": []})
+    with zipfile.ZipFile(plain / "Data/modmaster_dev.pak") as z:
+        assert "Libs/Tables/Character/ClothingConfig.xml" not in z.namelist()
 
 
 @pytest.mark.parametrize("value", [0, 10001])

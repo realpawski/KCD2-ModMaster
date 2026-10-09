@@ -226,6 +226,19 @@ class RuntimeManager:
                 continue  # Unrelated mods are never imported into the owned registry.
         return registry
 
+    def _character_tables(self, looks: list[dict]) -> dict[str, bytes]:
+        """Full character tables with every creature look from installed mods, or nothing without looks."""
+        from creatures.generator import CLOTHING_TABLE, COMPONENT_TABLE, merge_looks
+
+        if not looks:
+            return {}
+        with zipfile.ZipFile(self.game / "Data" / "Tables.pak") as z:
+            clothing = z.read(CLOTHING_TABLE).decode("utf-8-sig")
+            component = z.read(COMPONENT_TABLE).decode("utf-8-sig")
+        clothing, component = merge_looks(clothing, component, looks)
+        self._audit("creature_looks_merged", looks=[l.get("name") for l in looks])
+        return {CLOTHING_TABLE: clothing.encode("utf-8"), COMPONENT_TABLE: component.encode("utf-8")}
+
     def build_companion(self, registry: dict) -> Path:
         if not (self.source / "Data/Scripts/Mods/kcd_modmaster_dev.lua").is_file():
             raise ValueError("Bundled runtime source is missing")
@@ -246,8 +259,10 @@ class RuntimeManager:
             project = SimpleNamespace(id=RUNTIME_ID, name="KCD2 ModMaster In-Game Menu", author="PAWSKI",
                                       version=RUNTIME_VERSION, description="Spawn menu, freecam, noclip and god mode for KCD2 ModMaster.")
             write_manifest(built / "mod.manifest", project)
-            pack_data(self.source / "Data", built / "Data/modmaster_dev.pak",
-                      {"Scripts/ModMaster/registry.lua": registry_lua(registry)})
+            looks = [look for mod in registry["mods"] for look in mod.pop("looks", None) or []]
+            extra = {"Scripts/ModMaster/registry.lua": registry_lua(registry)}
+            extra.update(self._character_tables(looks))
+            pack_data(self.source / "Data", built / "Data/modmaster_dev.pak", extra)
             (built / "modmaster_registry.json").write_text(json.dumps(registry, indent=2), encoding="utf-8")
             self._write_marker(built, RUNTIME_ID, RUNTIME_VERSION)
             marker = json.loads((built / MARKER).read_text())
@@ -450,7 +465,7 @@ class RuntimeManager:
             raise ValueError("Creature check failed:\n" + "\n".join(errors))
         extra = {generator.soul_table_path(project.id):
                  generator.generate_soul_xml(project.id, creatures, bodies).encode("ascii")}
-        looks = []
+        looks: list[dict] = []
         for c in creatures:
             body = bodies[c.base_class]
             if not generator.custom_look(c, body):
@@ -460,12 +475,8 @@ class RuntimeManager:
             # Bodies are looked up under Objects/Characters/, so the skin is packed there as well.
             for name, data in files.items():
                 extra[f"Objects/Characters/{folder}{name}"] = data
-            looks.append((c, body, folder, skin, material))
-        if looks:
-            extra[generator.clothing_table_path(project.id)] = generator.generate_clothing_xml(
-                project.id, [(c, b) for c, b, *_rest in looks]).encode("ascii")
-            extra[generator.component_table_path(project.id)] = generator.generate_component_xml(
-                project.id, looks).encode("ascii")
+            looks.append(generator.look_rows(project.id, c, body, folder, skin, material))
+        self._looks = looks
         entries = [generator.registry_entry(project.id, c, bodies[c.base_class]) for c in creatures]
         return creatures, entries, extra
 
@@ -501,12 +512,15 @@ class RuntimeManager:
     def build_project(self, project) -> Path:
         mod_id(project.id)
         items, extra = self._stage_game_items(project)
+        self._looks = []
         creatures, creature_entries, creature_files = self._stage_creatures(project)
         props, compiled = self._stage_compiled_assets(project, items, creatures)
         extra = {**compiled, **extra, **creature_files}
         assets = (read_spawn_descriptors(project) + props + [self._item_registry_entry(i) for i in items]
                   + creature_entries)
         entry = {"id": project.id, "name": project.name, "version": project.version, "assets": assets}
+        if self._looks:
+            entry["looks"] = self._looks
         root = Path(project.project_dir)
         if root.is_symlink() or root.is_junction():
             raise ValueError("Linked project directory")

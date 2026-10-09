@@ -14,12 +14,8 @@ def soul_table_path(mod_id: str) -> str:
     return f"Libs/Tables/rpg/soul__{mod_id}.xml"
 
 
-def clothing_table_path(mod_id: str) -> str:
-    return f"Libs/Tables/Character/ClothingConfig__{mod_id}.xml"
-
-
-def component_table_path(mod_id: str) -> str:
-    return f"Libs/Tables/Character/CharacterComponent__{mod_id}.xml"
+CLOTHING_TABLE = "Libs/Tables/Character/ClothingConfig.xml"
+COMPONENT_TABLE = "Libs/Tables/Character/CharacterComponent.xml"
 
 
 def clothing_name(mod_id: str, creature: CreatureDefinition) -> str:
@@ -32,36 +28,43 @@ def custom_look(creature: CreatureDefinition, body: BaseBody) -> bool:
     return bool(creature.model_path) and not creature.is_human and bool(body.clothing and body.equipment_part)
 
 
-def _database(inner: list[str]) -> str:
-    return "\n".join(['<?xml version="1.0" encoding="us-ascii"?>',
-                      '<database xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="barbora" '
-                      'xsi:noNamespaceSchemaLocation="../database.xsd">', *inner, "</database>", ""])
+def look_rows(mod_id: str, creature: CreatureDefinition, body: BaseBody, folder: str, skin: str,
+              material: str) -> dict[str, str]:
+    """The ClothingConfig row and CharacterComponent that dress a creature in its own skin.
+
+    The game only patches database tables from mods, not the character tables, so the in-game menu mod
+    ships these rows merged into full copies of both tables."""
+    name = clothing_name(mod_id, creature)
+    row = {k: v for k, v in body.clothing.items()
+           if k not in ("Name", "DefaultBody", "DefaultHair", "DefaultBeard", "DefaultHead")}
+    row.update({"Name": name, "DefaultBody": name + "_body"})
+    clothing = "<ClothingConfig " + " ".join(f"{k}={quoteattr(v)}" for k, v in row.items()) + " />"
+    component = (f"<Component Name={quoteattr(name)} Race={quoteattr(body.race)} "
+                 f"Gender={quoteattr(body.gender or 'NotDefined')} FilePath={quoteattr(folder)}>"
+                 f"<DerivedComponents><Body Name={quoteattr(name + '_body')}><Elements>"
+                 f"<SkinElement EquipmentPart={quoteattr(body.equipment_part)} BodyLayerId=\"0\" "
+                 f"Model={quoteattr(skin)} Material={quoteattr(material)} /></Elements></Body></DerivedComponents>"
+                 "</Component>")
+    return {"name": name, "clothing": clothing, "component": component}
 
 
-def generate_clothing_xml(mod_id: str, looks: list[tuple[CreatureDefinition, BaseBody]]) -> str:
-    rows = []
-    for creature, body in looks:
-        row = {k: v for k, v in body.clothing.items()
-               if k not in ("Name", "DefaultBody", "DefaultHair", "DefaultBeard", "DefaultHead")}
-        row["Name"] = clothing_name(mod_id, creature)
-        row["DefaultBody"] = clothing_name(mod_id, creature) + "_body"
-        rows.append("\t\t<ClothingConfig " + " ".join(f"{k}={quoteattr(v)}" for k, v in row.items()) + " />")
-    return _database(['\t<ClothingConfigs version="1">', *rows, "\t</ClothingConfigs>"])
+def merge_looks(clothing_xml: str, component_xml: str, looks: list[dict]) -> tuple[str, str]:
+    """Adds the rows of every look to the game's tables; rows that are not exactly one element are refused."""
+    from xml.etree import ElementTree as ET
 
-
-def generate_component_xml(mod_id: str, looks: list[tuple[CreatureDefinition, BaseBody, str, str, str]]) -> str:
-    """looks: (creature, body, folder under Objects/Characters/, skin file, material file)."""
-    rows = []
-    for creature, body, folder, skin, material in looks:
-        name = clothing_name(mod_id, creature)
-        rows += [f"\t\t<Component Name={quoteattr(name)} Race={quoteattr(body.race)} "
-                 f"Gender={quoteattr(body.gender or 'NotDefined')} FilePath={quoteattr(folder)}>",
-                 "\t\t\t<DerivedComponents>",
-                 f"\t\t\t\t<Body Name={quoteattr(name + '_body')}>",
-                 f"\t\t\t\t\t<Elements><SkinElement EquipmentPart={quoteattr(body.equipment_part)} BodyLayerId=\"0\" "
-                 f"Model={quoteattr(skin)} Material={quoteattr(material)} /></Elements>",
-                 "\t\t\t\t</Body>", "\t\t\t</DerivedComponents>", "\t\t</Component>"]
-    return _database(['\t<CharacterComponents version="6">', *rows, "\t</CharacterComponents>"])
+    clothing_rows, component_rows = [], []
+    for look in looks:
+        clothing, component = ET.fromstring(look["clothing"]), ET.fromstring(look["component"])
+        if clothing.tag != "ClothingConfig" or component.tag != "Component":
+            raise ValueError(f"Creature look {look.get('name')} is malformed")
+        clothing_rows.append("\t\t" + look["clothing"])
+        component_rows.append("\t\t" + look["component"])
+    if not looks:
+        return clothing_xml, component_xml
+    close_clothing = clothing_xml.rindex("</ClothingConfigs>")
+    close_component = component_xml.rindex("</CharacterComponents>")
+    return (clothing_xml[:close_clothing] + "\n".join(clothing_rows) + "\n\t" + clothing_xml[close_clothing:],
+            component_xml[:close_component] + "\n".join(component_rows) + "\n\t" + component_xml[close_component:])
 
 
 def soul_name(mod_id: str, creature: CreatureDefinition) -> str:
