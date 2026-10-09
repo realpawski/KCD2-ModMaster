@@ -1,4 +1,4 @@
-ModMasterDev = {version="0.5.8", registryVersion=1, opened=false, assets={},
+ModMasterDev = {version="0.6.0", registryVersion=1, opened=false, assets={},
     spawns={}, selected=1, spawnSelected=1, tab="ASSETS", search="", category="", modFilter="",
     serial=0, timer=nil, message="Runtime loaded; in-game acceptance pending", locations={},
     settings={hotkey="f5",keyCode=116,noclipHotkey="f4",hudEnabled=true,freecamSpeed=5.0,fastMult=4.0,slowMult=0.25}}

@@ -92,10 +92,10 @@ class ModMasterMenu {
    add("Restore Health","heal","Fill health to maximum and clear injuries.",undefined);
    add("Entity ESP  ["+(espOn?"ON":"OFF")+"]","esp_toggle","Shows the name and distance above NPCs and animals within the ESP view range ("+espRange+" m). Stays on while the menu is closed. Change the range under Settings.",espOn?"on":"off");
    add("Freecam  ["+freecamStatus+"]","freecam",
-    "Fly freely through walls and terrain while the mouse steers the view. When Freecam ends, Henry is back where he started.\n\nControls\nWASD  Fly\nSpace / C  Up / Down\nShift  Fast\nCaps Lock  Precise on/off\nF4  Stop\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nCollision off, position restored on exit",
+    "Fly freely through walls and terrain while the mouse steers the view. When Freecam ends, Henry is back where he started.\n\nControls\nWASD  Fly\nSpace / C  Up / Down\nMouse wheel  Faster / slower\nF4  Stop\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nCollision off, position restored on exit",
     freecamStatus=="ON"?"on":"off");
    add("Noclip  ["+noclipStatus+"]","noclip",
-    "Henry flies through walls, doors, terrain, props and NPCs while the mouse steers the view. He stays where Noclip ends.\n\nControls\nWASD  Fly\nSpace / C  Up / Down\nShift  Fast\nCaps Lock  Precise on/off\nF4  Stop\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+noclipStatus+"\n\nBackend\nModMaster Noclip (direct position write, physics off)",
+    "Henry flies through walls, doors, terrain, props and NPCs while the mouse steers the view. He stays where Noclip ends.\n\nControls\nWASD  Fly\nSpace / C  Up / Down\nMouse wheel  Faster / slower\nF4  Stop\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+noclipStatus+"\n\nBackend\nModMaster Noclip (direct position write, physics off)",
     noclipStatus=="ON"?"on":"off");
    add("Restore Player Options","restore_player","Turn off God Mode / Freecam / Noclip and restore the values they changed.",undefined);
   } else if(active=="SETTINGS") {
@@ -166,13 +166,13 @@ class ModMasterMenu {
    if(!hudEnabled)return;
    box(34,48,350,58,0x17130F,88);box(34,48,350,3,0xBD9A5F,100);
    label((noclipHud?"MODMASTER NOCLIP":"MODMASTER FREECAM")+"   Speed "+(Math.round(settingValues[0]*100)/100),44,55,330,20,12,0xEDE3CC);
-   label("WASD fly | Space/C up/down | Shift fast | Caps Lock precise | "+candidateNoclipKey.toUpperCase()+" stop | "+hotkey.toUpperCase()+" menu",44,76,330,26,10,0xA89C86);
+   label("WASD fly | Space/C up/down | Wheel speed | "+candidateNoclipKey.toUpperCase()+" stop | "+hotkey.toUpperCase()+" menu",44,76,330,26,10,0xA89C86);
    return;
   }
   var start:Number=Math.floor(focus/9)*9;var count:Number=Math.min(9,entries.length-start);
   box(34,48,292,62,0xE4D6B8,100);
   label("KCD2 MODMASTER",46,59,266,28,21,0x241C12);
-  label("RUNTIME 0.5.8",48,87,266,16,10,0x6B5A3A);
+  label("RUNTIME 0.6.0",48,87,266,16,10,0x6B5A3A);
   box(34,110,292,3,0xBD9A5F,100);
   box(34,113,292,25,0x100D0A,94);
   var crumb:String=breadcrumb();

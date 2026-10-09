@@ -13,7 +13,7 @@ function ModMasterDev:ToggleFreecam()
     end
     self.freecam=c
     if not self:StartFlight("Freecam") then self.freecam=nil;return end
-    self:Log("Freecam active: WASD fly, Space/C up/down, Shift fast, Caps Lock precise; Henry returns when it ends")
+    self:Log("Freecam active: WASD fly, Space/C up/down, mouse wheel speed; Henry returns when it ends")
 end
 
 function ModMasterDev:StopFreecam(reason)

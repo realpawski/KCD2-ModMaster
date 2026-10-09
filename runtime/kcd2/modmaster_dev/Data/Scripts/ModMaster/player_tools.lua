@@ -168,7 +168,7 @@ function ModMasterDev:ToggleNoclip()
     if self.freecam then return self:StopFreecam("Freecam disabled") end
     if self.noclip then self:StopNoclip();return end
     if self:StartFlight("Noclip") then
-        self:Log("Noclip active: WASD fly, Space/C up/down, Shift fast, Caps Lock precise")
+        self:Log("Noclip active: WASD fly, Space/C up/down, mouse wheel speed")
     end
 end
 
