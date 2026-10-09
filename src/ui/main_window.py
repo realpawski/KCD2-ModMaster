@@ -216,7 +216,8 @@ class MainWindow(QMainWindow):
 
     def _after_update(self) -> None:
         """Brings the in-game menu and the Blender add-on up to the version that just got installed."""
-        previous = self.settings.last_run_version
+        # Versions before 0.9.7 did not record themselves; a configured game folder means an update.
+        previous = self.settings.last_run_version or ("an earlier version" if self.settings.game_dir else "")
         self.settings.last_run_version = VERSION
         self.settings.save()
         if not previous:
