@@ -55,6 +55,11 @@ def validate_game_item(item: GameItemDefinition, catalog: ItemCatalog | None,
     if mod_id and not MOD_ID.fullmatch(mod_id):
         err("Mod ID", f"'{mod_id}' is not a valid KCD2 mod ID (lowercase letters and underscores).")
 
+    base = catalog.item(item.base_guid) if catalog and item.base_guid else None
+    if item.mode != MODE_OVERRIDE and not item.workspace_asset_id and base is not None \
+            and item.model_path == base.attrs.get("Model"):
+        warn("Model", "It still looks like its base item. Pick your own model under General > Model.", "Model")
+
     try:
         canonical = str(uuid.UUID(item.guid)).lower() == item.guid
     except (ValueError, AttributeError, TypeError):

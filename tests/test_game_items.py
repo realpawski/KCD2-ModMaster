@@ -279,7 +279,20 @@ def test_build_packs_items_localization_and_preset(game, tmp_path, catalog):
     assert not (built / "Localization/German_xml.pak").exists()
     registry = json.loads((built / "modmaster_assets.json").read_text())
     categories = {a["id"]: a["category"] for a in registry["assets"]}
-    assert categories == {"hero_sword": "weapons", "g": "armor", "custom_blade": "weapons"}
+    assert categories == {"item:hero_sword": "weapons", "item:g": "armor", "item:custom_blade": "weapons"}
+    ids = [a["id"] for a in registry["assets"]]
+    assert len(ids) == len(set(ids))
+
+
+def test_item_and_prop_of_one_asset_keep_separate_menu_entries(tmp_path, catalog):
+    from runtime_tools.manager import RuntimeManager
+
+    item = new_item_from_base(catalog.by_name("longswordBroad"), "diamond_sword", "Diamond Sword")
+    entry = RuntimeManager._item_registry_entry(item)
+    assert entry["id"] == "item:diamond_sword" and entry["spawn_type"] == "inventory_item"
+    assert any(i.check_name == "Model" for i in validate_game_item(item, catalog, "swords"))
+    item.workspace_asset_id = "diamond_sword"
+    assert not any(i.check_name == "Model" for i in validate_game_item(item, catalog, "swords"))
 
 
 def test_build_refuses_invalid_items(game, tmp_path, catalog):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 
 from PySide6.QtCore import QLocale, Qt, QTimer
 from PySide6.QtGui import QGuiApplication
@@ -29,6 +30,7 @@ from items.fields import GROUP_ORDER, IDENTITY_ATTRS, field_info, type_label
 from items.gamedata import AttrSpec, ItemCatalog
 from items.models import MODE_OVERRIDE, GameItemDefinition, format_number
 from items.validator import ERROR, validate_game_item
+from ui.dialogs.new_item_dialog import compiled_models, item_model
 from ui import theme
 from ui.icons import get_svg_icon
 from ui.widgets import StatusPill, button, label
@@ -171,8 +173,9 @@ class AttrEditor:
 
 class ItemEditorDialog(QDialog):
     def __init__(self, item: GameItemDefinition, catalog: ItemCatalog, mod_id: str,
-                 asset_dir=None, parent=None):
+                 asset_dir=None, parent=None, workspace=None):
         super().__init__(parent)
+        self.workspace = workspace
         self.item = copy.deepcopy(item)
         self.catalog = catalog
         self.mod_id = mod_id
@@ -328,6 +331,24 @@ class ItemEditorDialog(QDialog):
         grid.addLayout(guid_row, r, 1, 1, 2)
         r += 1
 
+        if new_item and self.workspace is not None:
+            self.cb_model = QComboBox()
+            self.cb_model.setMinimumWidth(340)
+            base_model = self.base.attrs.get("Model", "") if self.base else ""
+            self.cb_model.addItem(f"Base item's model  ({Path(base_model).name or 'none'})", ("", base_model))
+            for asset_id, title, model in compiled_models(self.workspace):
+                self.cb_model.addItem(f"Workspace model: {title}", (asset_id, item_model(base_model, model)))
+            current = next((i for i in range(self.cb_model.count())
+                            if self.cb_model.itemData(i)[0] == self.item.workspace_asset_id), 0)
+            self.cb_model.setCurrentIndex(current)
+            self.cb_model.currentIndexChanged.connect(self._model_changed)
+            grid.addWidget(label("Model"), r, 0)
+            grid.addWidget(self.cb_model, r, 1, 1, 2, Qt.AlignLeft)
+            r += 1
+            grid.addWidget(label("Your model is held like the base item, so keep its grip where the base "
+                                 "item's grip is.", "Muted", wrap=True), r, 1, 1, 3)
+            r += 1
+
         self.chk_inventory = QCheckBox("Add one to Henry's starting inventory (new games)")
         self.chk_inventory.setChecked(self.item.add_to_player_inventory)
         self.chk_inventory.setEnabled(new_item)
@@ -350,6 +371,16 @@ class ItemEditorDialog(QDialog):
         r += 1
         grid.setRowStretch(r, 1)
         self.tabs.addTab(area, "General")
+
+    def _model_changed(self) -> None:
+        asset_id, model = self.cb_model.currentData()
+        self.item.workspace_asset_id = asset_id
+        self.asset_dir = Path(self.workspace) / "Assets" / asset_id if asset_id else None
+        if "Model" in self.editors:
+            self.editors["Model"].set_value(model)
+            self.editors["Model"].touched = True
+        self.item.attributes["Model"] = model
+        self._schedule_validation()
 
     def _fill_optional_attrs(self) -> None:
         self.cb_add_attr.clear()

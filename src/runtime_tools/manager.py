@@ -504,7 +504,8 @@ class RuntimeManager:
     @staticmethod
     def _item_registry_entry(item) -> dict:
         from items.fields import RUNTIME_CATEGORY
-        return {"id": item.item_id, "name": item.display_name or item.name,
+        # Prefixed so an item never collides with the prop entry of the asset that gives it its model.
+        return {"id": "item:" + item.item_id, "name": item.display_name or item.name,
                 "category": RUNTIME_CATEGORY.get(item.item_type, "items"),
                 "spawn_type": "inventory_item", "item_guid": item.guid,
                 "status": "packaged_unverified", "source": "compiled_custom"}

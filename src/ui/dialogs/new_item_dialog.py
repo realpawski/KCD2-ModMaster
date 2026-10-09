@@ -36,6 +36,14 @@ TYPE_ICONS = {
 }
 
 
+def item_model(base_model: str, model_path: str) -> str:
+    """A bare .cgf name lives next to the base item's model; full paths are kept."""
+    if "/" in model_path:
+        return model_path
+    folder = str(Path(base_model or "manmade/weapons").parent.as_posix())
+    return f"{folder}/{model_path}" if folder not in ("", ".") else model_path
+
+
 def compiled_models(workspace: Path) -> list[tuple[str, str, str]]:
     """Workspace assets with a compiled model: (asset_id, label, Model attribute or bare .cgf name)."""
     result = []
@@ -226,10 +234,7 @@ class NewItemDialog(QDialog):
             model = self.cb_model.currentData()
             if model:
                 asset_id, model_path = model
-                if "/" not in model_path:
-                    folder = str(Path(base.attrs.get("Model", "manmade/weapons")).parent.as_posix())
-                    model_path = f"{folder}/{model_path}" if folder not in ("", ".") else model_path
-                item.attributes["Model"] = model_path
+                item.attributes["Model"] = item_model(base.attrs.get("Model", ""), model_path)
                 item.workspace_asset_id = asset_id
         self.result_item = item
         self.accept()
