@@ -55,7 +55,7 @@ from ui.widgets import (
     set_cell_pill,
 )
 from utils.helpers import reveal_in_explorer
-from workspace.asset_model import list_workspace_assets
+from workspace.asset_model import AssetType, list_workspace_assets
 
 log = logging.getLogger(__name__)
 STEAM_RUN = "steam://rungameid/1771300"
@@ -128,7 +128,10 @@ class ModWorkspace(QWidget):
         self.btn_install.clicked.connect(lambda: self._run_build(install=True))
         self.btn_launch = button("Launch KCD2", "play")
         self.btn_launch.clicked.connect(self._launch)
-        for b in (self.btn_details, self.btn_folder, self.btn_build, self.btn_install, self.btn_launch):
+        self.btn_delete_mod = button("", "trash", "Danger", tooltip="Delete this mod")
+        self.btn_delete_mod.clicked.connect(self._delete_mod)
+        for b in (self.btn_details, self.btn_folder, self.btn_build, self.btn_install, self.btn_launch,
+                  self.btn_delete_mod):
             head.addWidget(b, 0, Qt.AlignTop)
         lay.addLayout(head)
 
@@ -251,9 +254,14 @@ class ModWorkspace(QWidget):
         return next((s for s in self.stored if s.item.item_id == item_id), None)
 
     def _update_item_buttons(self) -> None:
-        has = self._selected_stored() is not None
+        stored = self._selected_stored()
         for b in (self.btn_edit_item, self.btn_dup_item, self.btn_del_item):
-            b.setEnabled(has)
+            b.setEnabled(stored is not None)
+        # A changed game item cannot be deleted from the game; dropping the change restores the original.
+        override = stored is not None and stored.item.mode == MODE_OVERRIDE
+        self.btn_del_item.setText("Reset to game default" if override else "Delete")
+        self.btn_del_item.setToolTip("Removes your changes; the game item keeps its original values." if override
+                                     else "Deletes this item from the mod.")
 
     def _open_editor(self, stored_item, asset_dir) -> None:
         catalog = self._catalog()
@@ -321,9 +329,15 @@ class ModWorkspace(QWidget):
         if not stored:
             return
         name = stored.item.display_name or stored.item.name
-        answer = QMessageBox.question(self, "Delete item",
-                                      f"Delete '{name}' from {self.mod.name}?\n\n"
-                                      "The game copy is updated the next time you build and install.")
+        if stored.item.mode == MODE_OVERRIDE:
+            answer = QMessageBox.question(
+                self, "Reset to game default",
+                f"Reset '{name}' to its original game values?\n\nYour changes to it are removed from "
+                f"{self.mod.name}. The item itself stays in the game.")
+        else:
+            answer = QMessageBox.question(self, "Delete item",
+                                          f"Delete '{name}' from {self.mod.name}?\n\n"
+                                          "The game copy is updated the next time you build and install.")
         if answer == QMessageBox.Yes:
             self._store().delete(stored.item)
             self._fill_items()
@@ -477,18 +491,23 @@ class ModWorkspace(QWidget):
             return None
         finally:
             QApplication.restoreOverrideCursor()
-        names = {a.asset_id: a.name for a in list_workspace_assets(self.ctx.settings.workspace)}
+        assets = list_workspace_assets(self.ctx.settings.workspace)
+        names = {a.asset_id: a.name for a in assets}
         models = []
         for path, skeleton in sorted(skeletons.items()):
             asset_id = path.split("/")[2] if path.lower().startswith("objects/modmaster/") else ""
             models.append(ModelOption(asset_id, names.get(asset_id, asset_id or path), path, skeleton))
-        return bodies, models
+        exported = {m.asset_id for m in models}
+        unexported = sorted(a.name for a in assets
+                            if a.asset_type == AssetType.RIGGED.value and Path(a.workspace_dir).name not in exported)
+        return bodies, models, unexported
 
     def _open_creature(self, creature: CreatureDefinition) -> None:
         data = self._creature_data()
         if not data:
             return
-        dlg = CreatureEditorDialog(creature, *data, parent=self)
+        bodies, models, unexported = data
+        dlg = CreatureEditorDialog(creature, bodies, models, unexported, parent=self)
         if dlg.exec() == QDialog.Accepted and dlg.saved:
             self._creature_store().save(dlg.saved)
             self._fill_creatures()
@@ -579,6 +598,36 @@ class ModWorkspace(QWidget):
     def _launch(self) -> None:
         os.startfile(STEAM_RUN)
 
+
+    def _delete_mod(self) -> None:
+        if not self.mod:
+            return
+        mod = self.mod
+        answer = QMessageBox.warning(
+            self, "Delete mod",
+            f"Delete your mod '{mod.name}'?\n\nIt is removed from the game's Mods folder and moved to the "
+            "Trash folder of your workspace, where you can still restore it. Game files and other mods are "
+            "never touched.", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+        game_dir = self.ctx.settings.game_dir
+        if game_dir:
+            manager = RuntimeManager(Path(game_dir), self.ctx.settings.workspace)
+            try:
+                if manager.uninstall_mod(mod.id) and manager.status().state != "Not installed":
+                    manager.sync()
+            except (OSError, ValueError, RuntimeError) as exc:
+                QMessageBox.warning(self, "Delete mod", f"The installed copy could not be removed:\n{exc}\n\n"
+                                    "Close the game and try again. The mod project was not deleted.")
+                return
+        try:
+            trash = ModManager(self.ctx.settings.workspace).delete_mod(mod)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Delete mod", str(exc))
+            return
+        self.mod = None
+        self.page.refresh_list()
+        QMessageBox.information(self, "Delete mod", f"{mod.name} was moved to:\n{trash}")
 
     def _edit_details(self) -> None:
         dlg = CreateModDialog(self.ctx, self, mod=self.mod)

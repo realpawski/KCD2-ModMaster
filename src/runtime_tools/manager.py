@@ -150,6 +150,19 @@ class RuntimeManager:
         self._audit("installed", modid=identifier, path=str(target), restart_required=True)
         return target
 
+    def uninstall_mod(self, identifier: str) -> bool:
+        """Removes an installed mod built by ModMaster; any other mod folder is refused."""
+        if identifier == RUNTIME_ID:
+            raise ValueError("The in-game menu is removed under Settings > In-game menu.")
+        target = self._target(identifier)
+        if not target.exists():
+            return False
+        self._owned(target, identifier, repair=True)
+        self._backup(target, identifier)
+        shutil.rmtree(target)
+        self._audit("mod_uninstalled", modid=identifier)
+        return True
+
     def uninstall(self) -> None:
         target = self._target(RUNTIME_ID)
         self._owned(target, RUNTIME_ID)

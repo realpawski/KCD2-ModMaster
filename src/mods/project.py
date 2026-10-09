@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -130,3 +131,14 @@ class ModManager:
         mod.ensure_structure()
         mod.save()
         return mod
+
+    def delete_mod(self, mod: ModProject) -> Path:
+        """Moves one of the user's own mod projects to the workspace Trash, where it can be restored."""
+        project_dir = Path(mod.project_dir).resolve()
+        if project_dir.parent != self.mods_root.resolve() or not (project_dir / "modmaster.json").is_file():
+            raise ValueError(f"{mod.name} is not a ModMaster mod project and cannot be deleted here.")
+        trash = self.workspace_root / "Trash"
+        trash.mkdir(parents=True, exist_ok=True)
+        target = trash / f"{mod.id}_{time.strftime('%Y%m%d-%H%M%S')}"
+        shutil.move(str(project_dir), str(target))
+        return target

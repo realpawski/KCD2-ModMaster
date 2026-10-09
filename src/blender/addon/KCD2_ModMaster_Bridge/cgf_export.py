@@ -54,7 +54,13 @@ def _asset_enum(self, context):
 
 
 def _export_meshes(context, selected_only: bool) -> list:
-    objects = context.selected_objects if selected_only else context.view_layer.objects
+    objects = list(context.selected_objects if selected_only else context.view_layer.objects)
+    # A selected skeleton stands for everything it carries: bound meshes and objects parented to it.
+    for arm in [o for o in objects if o.type == "ARMATURE"]:
+        for obj in context.view_layer.objects:
+            bound = any(m.type == "ARMATURE" and m.object == arm for m in getattr(obj, "modifiers", []))
+            if (bound or obj.parent == arm) and obj not in objects:
+                objects.append(obj)
     return [o for o in objects if o.type == "MESH" and o.visible_get() and "proxy" not in o.name.lower()]
 
 
@@ -138,6 +144,25 @@ def _rigged_meshes(meshes: list) -> tuple:
                 bound = [o for o in meshes if any(m.type == "ARMATURE" and m.object == arm for m in o.modifiers)]
                 return arm, bound
     return None, []
+
+
+def _nearest_bone(armature, obj) -> str:
+    """The bone closest to an object's centre, so a loose hat follows the head."""
+    from mathutils import Vector
+    from mathutils.geometry import intersect_point_line
+
+    corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    centre = sum(corners, Vector()) / len(corners)
+    best, best_distance = "", float("inf")
+    for bone in armature.data.bones:
+        head = armature.matrix_world @ bone.head_local
+        tail = armature.matrix_world @ bone.tail_local
+        point, factor = intersect_point_line(centre, head, tail)
+        point = head if factor < 0 else tail if factor > 1 else point
+        distance = (centre - point).length
+        if distance < best_distance:
+            best, best_distance = bone.name, distance
+    return best
 
 
 def _original_bones(meta: dict) -> dict:
@@ -330,7 +355,11 @@ class KCD2_OT_export_cgf(bpy.types.Operator):
                              "as 'Rigged model' and export from that scene.")
         model, _textures = cry_compile.model_paths(asset_id)
         dae = work / f"{asset_id}.dae"
-        materials = dae_export.write_skin_dae(dae, asset_id, armature, bound, asset_id, _original_bones(meta))
+        rigid = {m.name: _nearest_bone(armature, m) for m in meshes if m not in bound}
+        for mesh_name, bone in rigid.items():
+            self.report({"INFO"}, f"{mesh_name} is not weighted to the skeleton; it follows bone {bone}.")
+        materials = dae_export.write_skin_dae(dae, asset_id, armature, bound + [m for m in meshes if m not in bound],
+                                              asset_id, _original_bones(meta), rigid)
         subs = cry_compile.compile_skin(rc, dae, compiled / f"{model}.skin")
         by_label = {dae_export.material_label(asset_id, i, m): m for i, m in enumerate(materials)}
         by_clean = {dae_export.clean_material_name(m.name): m for m in bpy.data.materials}

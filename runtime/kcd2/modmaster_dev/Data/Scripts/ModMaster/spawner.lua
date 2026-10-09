@@ -94,7 +94,9 @@ function ModMasterDev:RandomSoul(archetype)
     if not pool then
         pool={}
         for _,a in ipairs(self.assets) do
-            if a.spawn_type=="soul" and a.soul_guid and a.archetype==archetype then table.insert(pool,a.soul_guid) end
+            if a.spawn_type=="soul" and a.soul_guid and a.archetype==archetype and a.source~="compiled_custom" then
+                table.insert(pool,a.soul_guid)
+            end
         end
         self.soulPools[archetype]=pool
     end
@@ -120,6 +122,20 @@ function ModMasterDev:SoulProperties(class,guid,model)
     return props
 end
 
+-- Health is capped at 100 in KCD2, so more health means taking a matching share of every hit back.
+function ModMasterDev:ToughnessTick(entity,factor,last)
+    local alive=System.GetEntity and System.GetEntity(entity.id)==entity
+    local soul=entity.soul
+    if not alive or not soul then return end
+    local ok,now=pcall(soul.GetState,soul,"health")
+    if not ok or type(now)~="number" or now<=0 then return end
+    if last and now<last then
+        now=last-(last-now)/factor
+        pcall(soul.SetState,soul,"health",now)
+    end
+    if Script and Script.SetTimer then Script.SetTimer(100,function() self:ToughnessTick(entity,factor,now) end) end
+end
+
 -- Creatures from a mod carry their own health and stats; the soul exists a moment after the spawn.
 function ModMasterDev:ApplyCreature(entity,asset)
     if not asset.health and type(asset.stats)~="table" then return end
@@ -130,11 +146,12 @@ function ModMasterDev:ApplyCreature(entity,asset)
         for stat,level in pairs(asset.stats or {}) do
             if pcall(soul.SetStatLevel,soul,stat,level) then table.insert(done,stat .. " " .. level) end
         end
-        if asset.health then
-            if entity.actor and entity.actor.SetMaxHealth then pcall(entity.actor.SetMaxHealth,entity.actor,asset.health) end
+        if asset.health and asset.health<100 then
             pcall(soul.SetState,soul,"health",asset.health)
-            local ok,now=pcall(soul.GetState,soul,"health")
-            table.insert(done,"health " .. tostring(ok and now or "?") .. "/" .. asset.health)
+            table.insert(done,"health " .. asset.health)
+        elseif asset.health and asset.health>100 then
+            self:ToughnessTick(entity,asset.health/100,nil)
+            table.insert(done,string.format("takes %d%% damage",math.floor(10000/asset.health+0.5)))
         end
         self:Log(asset.name .. " stats: " .. table.concat(done,", "))
     end

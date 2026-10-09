@@ -162,6 +162,37 @@ def test_store_round_trip_and_unique_ids(tmp_path):
     assert store.list() == []
 
 
+def test_deleting_a_mod_moves_only_own_projects_to_trash(tmp_path):
+    manager = ModManager(tmp_path)
+    mod = manager.create_mod("Mine", "mine")
+    trash = manager.delete_mod(mod)
+    assert trash.parent == tmp_path / "Trash" and (trash / "modmaster.json").is_file()
+    assert manager.get_mod("mine") is None
+    foreign = tmp_path / "elsewhere"
+    foreign.mkdir()
+    (foreign / "modmaster.json").write_text("{}")
+    mod.project_dir = str(foreign)
+    with pytest.raises(ValueError):
+        manager.delete_mod(mod)
+    assert foreign.is_dir()
+
+
+def test_uninstall_refuses_mods_not_built_by_modmaster(tmp_path):
+    game = tmp_path / "game"
+    (game / "Data").mkdir(parents=True)
+    (game / "Bin").mkdir()
+    manager = RuntimeManager(game, tmp_path / "ws")
+    other = game / "Mods" / "someone_elses_mod"
+    other.mkdir(parents=True)
+    (other / "mod.manifest").write_text("<mod/>")
+    with pytest.raises(ValueError, match="unowned"):
+        manager.uninstall_mod("someone_elses_mod")
+    assert other.is_dir()
+    assert manager.uninstall_mod("not_installed") is False
+    with pytest.raises(ValueError):
+        manager.uninstall_mod("kcd_modmaster_dev")
+
+
 @pytest.mark.parametrize("value", [0, 10001])
 def test_health_range_is_enforced(value):
     c = CreatureDefinition("b", "B", "Boar", health=value)

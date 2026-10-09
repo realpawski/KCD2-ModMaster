@@ -80,7 +80,7 @@ def _mesh_section(obj, mesh, index: int, materials: list[str], library: str) -> 
     return "\n".join(out), used
 
 
-def _controller(obj, mesh, index: int, bones: list, bone_world: dict) -> str:
+def _controller(obj, mesh, index: int, bones: list, bone_world: dict, fallback_bone: str | None = None) -> str:
     cid, gid = f"skin{index}", f"geom{index}"
     names = [b.name for b in bones]
     group_to_bone = {g.index: g.name for g in obj.vertex_groups if g.name in bone_world}
@@ -91,7 +91,7 @@ def _controller(obj, mesh, index: int, bones: list, bone_world: dict) -> str:
         influences = sorted(((g.weight, group_to_bone[g.group]) for g in v.groups
                              if g.group in group_to_bone and g.weight > 1e-4), reverse=True)[:MAX_WEIGHTS]
         if not influences:
-            influences = [(1.0, names[0])]
+            influences = [(1.0, fallback_bone if fallback_bone in names else names[0])]
         total = sum(w for w, _ in influences)
         vcount.append(len(influences))
         for w, bone in influences:
@@ -135,7 +135,8 @@ def game_matrix(rows: list[float]) -> Matrix:
 
 
 def write_skin_dae(path: Path, name: str, armature, meshes: list, library: str,
-                   original_bones: dict[str, list[float]] | None = None) -> list[str]:
+                   original_bones: dict[str, list[float]] | None = None,
+                   rigid: dict[str, str] | None = None) -> list[str]:
     """Write `meshes` skinned to `armature` and return the Blender material names in slot order.
 
     Blender changes bone orientations on import, while the game requires its own (an identity
@@ -154,7 +155,7 @@ def write_skin_dae(path: Path, name: str, armature, meshes: list, library: str,
         try:
             section, used = _mesh_section(obj, mesh, index, materials, library)
             geometries.append(section)
-            controllers.append(_controller(obj, mesh, index, bones, bone_world))
+            controllers.append(_controller(obj, mesh, index, bones, bone_world, (rigid or {}).get(obj.name)))
         finally:
             evaluated.to_mesh_clear()
         bindings = "".join(f'<instance_material symbol="{escape(_sid(label))}" target="#{escape(_sid(label))}"/>'

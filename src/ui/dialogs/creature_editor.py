@@ -42,8 +42,9 @@ def _section(title: str) -> QWidget:
 
 class CreatureEditorDialog(QDialog):
     def __init__(self, creature: CreatureDefinition, bodies: dict[str, BaseBody], models: list[ModelOption],
-                 parent=None):
+                 unexported: list[str] | None = None, parent=None):
         super().__init__(parent)
+        self.unexported = unexported or []
         self.creature = copy.deepcopy(creature)
         self.bodies = bodies
         self.models = models
@@ -115,12 +116,19 @@ class CreatureEditorDialog(QDialog):
         self.cb_model.addItem("The body's own game look", "")
         for m in self.models:
             self.cb_model.addItem(f"{m.name}  ·  {m.path}", m.path)
+        # Rigged assets that were never exported are listed but cannot be picked yet.
+        for name in self.unexported:
+            self.cb_model.addItem(f"{name}  ·  not exported yet", None)
+            self.cb_model.model().item(self.cb_model.count() - 1).setEnabled(False)
         index = self.cb_model.findData(self.creature.model_path)
         self.cb_model.setCurrentIndex(max(0, index))
         self.cb_model.currentIndexChanged.connect(self._fill_bodies)
         self.form.addWidget(self.cb_model)
-        self.form.addWidget(label("Your rigged models appear here after Export to KCD2 with Rigged selected.",
-                                  "Muted", wrap=True))
+        hint = "Your rigged models appear here after EXPORT TO KCD2 in Blender with Rigged selected."
+        if self.unexported:
+            hint += (" Not exported yet: " + ", ".join(self.unexported) + ". Open them from Workspace Assets "
+                     "and export them first.")
+        self.form.addWidget(label(hint, "Muted", wrap=True))
 
     def _build_body(self) -> None:
         self.form.addWidget(_section("BODY"))
@@ -158,7 +166,8 @@ class CreatureEditorDialog(QDialog):
         self.sp_health.valueChanged.connect(self._update)
         grid.addWidget(label("Health"), 1, 0)
         grid.addWidget(self.sp_health, 1, 1)
-        grid.addWidget(label("100 is a normal creature", "Muted"), 1, 2)
+        self.lbl_health = label("", "Muted", wrap=True)
+        grid.addWidget(self.lbl_health, 1, 2)
         self.stat_spins: dict[str, QSpinBox] = {}
         for row, name in enumerate(STAT_NAMES, start=2):
             spin = QSpinBox()
@@ -253,6 +262,13 @@ class CreatureEditorDialog(QDialog):
         self.lbl_title.setText(c.name)
         self.pill_kind.set("NPC" if c.is_human else "Animal", "accent")
         self.lbl_combat.setText(f"{self.sl_combat.value()} %")
+        if c.health > 100:
+            self.lbl_health.setText(f"Takes only {100 * 100 // c.health} % of every hit, so it survives "
+                                    f"{c.health / 100:g}x as much.")
+        elif c.health < 100:
+            self.lbl_health.setText(f"Starts with {c.health} of 100 health.")
+        else:
+            self.lbl_health.setText("100 is a normal creature.")
         body = self.bodies.get(c.base_class)
         att = attitude(c.base_class, c.attitude)
         stats = ", ".join(f"{k.title()} {v}" for k, v in c.stats().items()) or "game default stats"

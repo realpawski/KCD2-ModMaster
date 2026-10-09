@@ -361,24 +361,28 @@ def test_souls_spawn_as_their_class_with_the_chosen_soul_and_are_tracked():
 def test_mod_creatures_get_their_model_stats_and_health():
  lua=runtime()
  lua.execute('''
-  specs={};removed={};levels={};maxHealth=nil;health=nil;soulReady=true
+  specs={};removed={};levels={};health=100;soulReady=true;spawned={}
   System.SpawnEntity=function(spec) table.insert(specs,spec)
    local soul=soulReady and {SetStatLevel=function(s,n,v) levels[n]=v end,SetState=function(s,n,v) health=v end,
     GetState=function(s,n) return health end} or nil
-   return {id=#specs,soul=soul,actor={SetMaxHealth=function(a,v) maxHealth=v end},GetName=function() return spec.name end} end
+   local e={id=#specs,soul=soul,GetName=function() return spec.name end};spawned[e.id]=e;return e end
   System.RemoveEntity=function(id) table.insert(removed,id) end
-  System.GetEntity=function(id) end
+  System.GetEntity=function(id) return spawned[id] end
   Boar={Properties={fileModel="boar.cdf"}}
-  ModMasterDev.assets={{id="soul:b1",spawn_type="soul",archetype="Boar",soul_guid="0a1b2c3d-0000-0000-0000-0000000000b1"}}
+  ModMasterDev.assets={{id="soul:b1",spawn_type="soul",archetype="Boar",soul_guid="0a1b2c3d-0000-0000-0000-0000000000b1"},
+   {id="creature:other",spawn_type="soul",archetype="Boar",soul_guid="0a1b2c3d-0000-0000-0000-00000000beef",source="compiled_custom"}}
   creature={id="creature:wizard",name="Wizard Boar",spawn_type="soul",archetype="Boar",entity_class="Boar",category="animals",
    soul_guid="0a1b2c3d-0000-0000-0000-00000000c0de",model_path="Objects/modmaster/wizard/wizard.cdf",health=250,
    stats={strength=12},source="compiled_custom"}
   ModMasterDev:SpawnSoul(creature,{x=0,y=3,z=0})
   timers[#timers]()
+  health=60;timers[#timers]()
  ''')
+ # 250 health: a hit of 40 only costs 16, so the creature lasts 2.5 times as long.
+ assert abs(lua.eval('health')-84)<1e-9
  assert lua.eval('specs[1].properties.fileModel')=='Objects/modmaster/wizard/wizard.cdf'
  assert lua.eval('specs[1].properties.guidSharedSoulId')=='0a1b2c3d-0000-0000-0000-00000000c0de'
- assert lua.eval('levels.strength==12 and maxHealth==250 and health==250')
+ assert lua.eval('levels.strength==12')
  lua.execute('specs={};soulReady=false;ModMasterDev:SpawnSoul(creature,{x=0,y=3,z=0})')
  # Without the mod's soul in the game the creature borrows a game soul and keeps its model.
  assert lua.eval('#removed==1 and specs[2].properties.guidSharedSoulId')=='0a1b2c3d-0000-0000-0000-0000000000b1'
