@@ -176,3 +176,24 @@ def test_rgba_tiff_keeps_its_alpha_channel(tmp_path):
     with Image.open(path) as image:
         assert image.mode == "RGBA" and image.size == (4, 2)
         assert image.getpixel((0, 0)) == (10, 20, 30, 40) and image.getpixel((3, 1)) == (200, 100, 50, 250)
+
+
+def test_painter_texture_sets_keep_the_modmaster_suffix():
+    from pathlib import Path
+
+    from compiler import cry_compile
+    files = [Path("boar_eye [ModMaster]_BaseColor.png"), Path("boar_eye [ModMaster]_Normal.png")]
+    matched = cry_compile().match_substance_textures(files, ["boar_eye [ModMaster]", "hair_cards [ModMaster]"])
+    assert set(matched) == {"boar_eye [ModMaster]"}
+    assert matched["boar_eye [ModMaster]"]["base"].name == "boar_eye [ModMaster]_BaseColor.png"
+
+
+def test_painter_plugin_is_installed_next_to_an_existing_painter_profile(tmp_path):
+    from compiler import cry_compile
+    cc = cry_compile()
+    profile = tmp_path / "OneDrive" / "Documents" / "Adobe" / "Adobe Substance 3D Painter"
+    profile.mkdir(parents=True)
+    target = cc.install_painter_plugin(tmp_path)
+    assert target == profile / "python" / "plugins" / "kcd2_modmaster.py"
+    assert "export_for_modmaster" in target.read_text(encoding="utf-8")
+    assert cc.install_painter_plugin(tmp_path) == target

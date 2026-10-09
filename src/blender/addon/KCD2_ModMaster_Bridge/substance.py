@@ -49,6 +49,11 @@ class KCD2_OT_open_substance(bpy.types.Operator):
             self.report({"ERROR"}, "No visible mesh objects to paint.")
             return {"CANCELLED"}
         (folder / TEXTURES).mkdir(parents=True, exist_ok=True)
+        try:
+            plugin = cry_compile.install_painter_plugin()
+        except OSError as exc:
+            plugin = None
+            self.report({"WARNING"}, f"The Painter plugin could not be installed: {exc}")
         project = next(iter(sorted(folder.glob("*.spp"))), None)
         if project is not None:
             # A saved Painter project keeps the layers; reopening it beats starting over from the mesh.
@@ -72,8 +77,9 @@ class KCD2_OT_open_substance(bpy.types.Operator):
                 context.view_layer.objects.active = active
             args = [str(painter), "--mesh", str(fbx), "--export-path", str(folder / TEXTURES)]
         subprocess.Popen(args, close_fds=True)
-        self.report({"INFO"}, f"Painter opens. Export the textures to {folder / TEXTURES}, then click "
-                              "IMPORT SUBSTANCE TEXTURES.")
+        how = ("In Painter use File > Export for KCD2 ModMaster" if plugin
+               else f"In Painter export the textures to {folder / TEXTURES}")
+        self.report({"INFO"}, f"Painter opens. {how}, then click IMPORT SUBSTANCE TEXTURES here.")
         return {"FINISHED"}
 
 

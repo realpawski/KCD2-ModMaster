@@ -265,7 +265,11 @@ def texture_set(material_name: str) -> str:
 
 def match_substance_textures(files: list[Path], material_names: list[str]) -> dict[str, dict[str, Path]]:
     """material -> {base|normal|roughness|metallic: file} from Painter's <TextureSet>_<Channel> exports."""
-    wanted = {_key(texture_set(name)): name for name in material_names}
+    # Painter keeps the material name as the texture set name, ModMaster suffix included.
+    wanted = {}
+    for name in material_names:
+        wanted[_key(texture_set(name))] = name
+        wanted[_key(name)] = name
     result: dict[str, dict[str, Path]] = {}
     for file in sorted(files):
         if file.suffix.lower() not in IMAGE_SUFFIXES:
@@ -307,3 +311,27 @@ def write_tiff_rgba(path: Path, width: int, height: int, pixels: bytes) -> Path:
     out += pixels
     Path(path).write_bytes(bytes(out))
     return Path(path)
+
+
+PAINTER_PLUGIN = Path(__file__).resolve().parent / "painter_plugin" / "kcd2_modmaster.py"
+
+
+def painter_plugin_dir(home: Path | None = None) -> Path:
+    """Painter's user plugin folder; Documents may live under OneDrive."""
+    home = Path(home or Path.home())
+    candidates = [home / "Documents", home / "OneDrive" / "Documents", home / "OneDrive" / "Dokumente"]
+    for documents in candidates:
+        painter = documents / "Adobe" / "Adobe Substance 3D Painter"
+        if painter.is_dir():
+            return painter / "python" / "plugins"
+    return candidates[0] / "Adobe" / "Adobe Substance 3D Painter" / "python" / "plugins"
+
+
+def install_painter_plugin(home: Path | None = None) -> Path:
+    """Copies the ModMaster export plugin into Painter; returns its path. Updates an older copy."""
+    target = painter_plugin_dir(home) / PAINTER_PLUGIN.name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    data = PAINTER_PLUGIN.read_bytes()
+    if not target.is_file() or target.read_bytes() != data:
+        target.write_bytes(data)
+    return target
