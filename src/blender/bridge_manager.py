@@ -231,6 +231,27 @@ class BlenderBridgeManager:
             return True, f"Bridge addon installed successfully to:\n" + "\n".join(installed_paths)
         return False, "Could not write to any Blender addon directory."
 
+    def refresh_installed_addons(self) -> list[str]:
+        """Replaces add-on copies that are already installed; never installs into new Blender versions."""
+        src = self.source_addon_dir
+        refreshed = []
+        if not src.is_dir():
+            return refreshed
+        for dst in self.get_target_addon_dirs():
+            if dst.is_symlink() or not dst.is_dir():
+                continue
+            try:
+                staged = dst.with_name(dst.name + ".new")
+                if staged.exists():
+                    shutil.rmtree(staged)
+                shutil.copytree(src, staged, ignore=shutil.ignore_patterns("__pycache__"))
+                shutil.rmtree(dst)
+                staged.rename(dst)
+                refreshed.append(str(dst))
+            except OSError as e:
+                log.warning("Could not refresh the add-on in %s: %s", dst, e)
+        return refreshed
+
     def _try_enable_addon_headless(self) -> None:
         """Attempts to enable the addon in user preferences automatically."""
         blender_exe = self.settings.blender_exe

@@ -5,11 +5,13 @@ class ModMasterMenu {
  var view:Number;var active:String;var entries:Array;var assets:Array;var focus:Number;var total:Number;
  var candidateKey:String;var candidateNoclipKey:String;var modalOpen:Boolean;var modal:MovieClip;var searchField:TextField;var queries:Object;var queryKey:String;
  var shiftHeld:Boolean;var ctrlHeld:Boolean;
+ var espLayer:MovieClip;var overlayOnly:Boolean;var espOn:Boolean;var espRange:String;var inputMode:String;
  var cameraOnly:Boolean;var noclipHud:Boolean;var hotkey:String;var keyCode:Number;var hudEnabled:Boolean;var kind:String;
  var detail:String;var message:String;var god:String;var noclipStatus:String;var freecamStatus:String;var values:Array;var settingValues:Array;
  static function main(mc:MovieClip):Void {app=new ModMasterMenu(mc);}
  function ModMasterMenu(mc:MovieClip) {
   root=mc;depth=1;actionQueue=[];assets=[];entries=[];values=[0,0,0,0,0,0,1];settingValues=[5,4,0.25];
+  overlayOnly=false;espOn=false;espRange="100";inputMode="";
   modalOpen=false;queries={};queryKey="HOME";cameraOnly=false;noclipHud=false;hotkey="f5";candidateKey="f5";keyCode=116;candidateNoclipKey="f4";hudEnabled=true;kind="static_prop";view=0;focus=0;active="ASSETS";total=0;detail="";message="Runtime connected";god="unavailable";noclipStatus="OFF";freecamStatus="OFF";
   Stage.scaleMode="showAll";Stage.align="";root.stop();
   mc["mmReady"]=false;mc["mmSequence"]=0;mc["mmAck"]=0;mc["mmAction"]="";
@@ -21,6 +23,9 @@ class ModMasterMenu {
   mc["fc_freecam"]=function(enabled:Boolean) {self.noclipHud=false;self.cameraOnly=enabled;self.shown=!enabled;mc["mmVisible"]=!enabled;self.openedAt=getTimer();self.closeKeyPressed=false;self.draw();};
   mc["fc_noclip"]=function(enabled:Boolean) {self.noclipHud=true;self.cameraOnly=enabled;self.shown=!enabled;mc["mmVisible"]=!enabled;self.openedAt=getTimer();self.closeKeyPressed=false;self.draw();};
   mc["fc_settings"]=function(key:String,code:Number,hud:Boolean,speed:String,fast:String,slow:String,noclipKey:String) {self.hotkey=key;self.candidateKey=key;self.keyCode=code;self.hudEnabled=hud;self.settingValues=[Number(speed),Number(fast),Number(slow)];self.candidateNoclipKey=noclipKey;self.draw();};
+  mc["fc_overlay"]=function(enabled:Boolean) {self.overlayOnly=enabled;self.cameraOnly=false;self.shown=!enabled;mc["mmVisible"]=!enabled;self.openedAt=getTimer();self.closeKeyPressed=false;self.draw();};
+  mc["fc_esp"]=function(data:String) {self.drawEsp(data);};
+  mc["fc_esp_state"]=function(enabled:Boolean,range:String) {self.espOn=enabled;self.espRange=range;self.draw();};
   mc["fc_player"]=function(g:String,nc:String,fc:String) {self.god=g;self.noclipStatus=nc;self.freecamStatus=fc;self.draw();};
   mc["cry_onShow"]=function() {self.shown=true;self.cameraOnly=false;self.openedAt=getTimer();self.closeKeyPressed=false;mc["mmVisible"]=true;self.draw();};
   mc["cry_onHide"]=function() {self.shown=false;mc["mmVisible"]=false;};
@@ -69,6 +74,8 @@ class ModMasterMenu {
   entries=[];
   if(view==0) {
    add("Asset Browser  >","tab:ASSETS","Browse installed spawnable assets.",undefined);
+   add("NPCs  >","category:npcs","Spawn people with their own AI, schedule and animations. 'Random NPC' picks a new one each time.",undefined);
+   add("Animals  >","category:animals","Spawn living animals that move and react. 'Random Boar', 'Random Wolf' and so on pick a new one each time.",undefined);
    add("Weapons  >","category:weapons","Give real mod weapon items to inventory.",undefined);
    add("Armor  >","category:armor","Give real mod armor items to inventory.",undefined);
    add("Props  >","category:props","Place compiled mod props into the world.",undefined);
@@ -83,6 +90,7 @@ class ModMasterMenu {
     "Henry cannot die and his health is kept full. Stays active while the menu is closed and is never saved.\n\nStatus\n"+god.toUpperCase()+"\n\nBackend\nVanilla immortality buff + health refill",
     god=="ON"?"on":(god=="unavailable"?"unavailable":"off"));
    add("Restore Health","heal","Fill health to maximum and clear injuries.",undefined);
+   add("Entity ESP  ["+(espOn?"ON":"OFF")+"]","esp_toggle","Shows the name and distance above NPCs and animals within the ESP view range ("+espRange+" m). Stays on while the menu is closed. Change the range under Settings.",espOn?"on":"off");
    add("Freecam  ["+freecamStatus+"]","freecam",
     "Fly freely through walls and terrain while the mouse steers the view. When Freecam ends, Henry is back where he started.\n\nControls\nWASD  Fly\nSpace / C  Up / Down\nShift  Fast\nCaps Lock  Precise on/off\nF4  Stop\n\nSpeed\n"+(Math.round(settingValues[0]*100)/100)+"\n\nStatus\n"+freecamStatus+"\n\nBackend\nCollision off, position restored on exit",
     freecamStatus=="ON"?"on":"off");
@@ -96,6 +104,7 @@ class ModMasterMenu {
     hudEnabled?"on":"off");
    add("Menu Hotkey  ["+candidateKey.toUpperCase()+"]","hotkey_next","Left / Right: choose F2 to F11. Enter: apply. Avoid keys used by your game. Current session setting.",undefined);
    add("Noclip Hotkey  ["+candidateNoclipKey.toUpperCase()+"]","noclip_hotkey_next","Left / Right: choose F2 to F11 (must differ from the Menu Hotkey). Enter: apply. Works even with the menu closed -- Noclip does not need the menu at all.",undefined);
+   add("ESP View Range  ["+espRange+" m]","esp_range_edit","Enter: type a range in metres (5 to 2000). Default 100.",undefined);
    add("Freecam Speed  < "+(Math.round(settingValues[0]*100)/100)+" >","setting:0","Left / Right: adjust the base Freecam/Noclip speed. Enter: apply.",undefined);
    add("Fast Multiplier  < "+(Math.round(settingValues[1]*100)/100)+"x >","setting:1","Left / Right: adjust the Shift speed multiplier. Enter: apply.",undefined);
    add("Precision Multiplier  < "+(Math.round(settingValues[2]*100)/100)+"x >","setting:2","Left / Right: adjust the Ctrl speed multiplier. Enter: apply.",undefined);
@@ -123,8 +132,22 @@ class ModMasterMenu {
   entries.unshift({title:"Search: "+(query.length>0?query:"[Enter]"),action:"open_search",description:"Enter: edit search. Ctrl+A selects all; Delete clears; Ctrl+C / Ctrl+V copy and paste."});
   focus=Math.max(0,Math.min(entries.length-1,focus));
  }
+ function drawEsp(data:String):Void {
+  if(espLayer!=undefined)espLayer.removeMovieClip();
+  espLayer=root.createEmptyMovieClip("espLayer",90000);
+  if(data==undefined || data=="")return;
+  var rows:Array=data.split("\n");
+  var fmt:TextFormat=new TextFormat();fmt.font="ModMaster Sans";fmt.size=12;fmt.color=0xF2D58A;fmt.align="center";
+  for(var r:Number=0;r<rows.length;r++) {
+   var parts:Array=rows[r].split("|");if(parts.length<3)continue;
+   var x:Number=Number(parts[0])*12.8;var y:Number=Number(parts[1])*7.2;
+   espLayer.createTextField("esp"+r,r+1,x-120,y-18,240,20);var tf:TextField=espLayer["esp"+r];
+   tf.embedFonts=true;tf.selectable=false;tf.text=parts.slice(2).join("|");tf.setTextFormat(fmt);
+  }
+ }
  function draw():Void {
   build();if(panel!=undefined)panel.removeMovieClip();depth=1;panel=root.createEmptyMovieClip("panel",depth++);
+  if(overlayOnly && !shown && !cameraOnly)return;
   if(cameraOnly) {
    if(!hudEnabled)return;
    box(34,48,350,58,0x17130F,88);box(34,48,350,3,0xBD9A5F,100);
@@ -135,7 +158,7 @@ class ModMasterMenu {
   var start:Number=Math.floor(focus/9)*9;var count:Number=Math.min(9,entries.length-start);
   box(34,48,292,62,0xE4D6B8,100);
   label("KCD2 MODMASTER",46,59,266,28,21,0x241C12);
-  label("RUNTIME 0.5.5",48,87,266,16,10,0x6B5A3A);
+  label("RUNTIME 0.5.6",48,87,266,16,10,0x6B5A3A);
   box(34,110,292,3,0xBD9A5F,100);
   box(34,113,292,25,0x100D0A,94);
   var crumb:String=breadcrumb();
@@ -157,6 +180,7 @@ class ModMasterMenu {
   label(message,354,270,254,28,11,0xA89C86);
  }
  function openSearch():Void {
+  inputMode="";
   modalOpen=true;modal=root.createEmptyMovieClip("searchDialog",100000);
   modal.beginFill(0x17130F,98);modal.lineStyle(1,0xBD9A5F,100);modal.moveTo(390,250);modal.lineTo(890,250);modal.lineTo(890,430);modal.lineTo(390,430);modal.lineTo(390,250);modal.endFill();
   modal.createTextField("heading",1,410,270,460,30);var heading:TextField=modal["heading"];
@@ -166,12 +190,20 @@ class ModMasterMenu {
   modal.createTextField("help",3,410,375,460,35);var help:TextField=modal["help"];fmt.size=12;help.embedFonts=true;help.text="Enter: search | Esc: cancel | Ctrl+A / C / V";help.setTextFormat(fmt);
   Selection.setFocus(searchField);Selection.setSelection(searchField.text.length,searchField.text.length);
  }
+ function openRangeInput():Void {
+  openSearch();inputMode="esp_range";
+  var heading:TextField=modal["heading"];var fmt:TextFormat=heading.getTextFormat();heading.text="ESP VIEW RANGE (METRES)";heading.setTextFormat(fmt);
+  searchField.restrict="0-9";searchField.maxChars=4;searchField.text=espRange;searchField.setTextFormat(searchField.getNewTextFormat());
+  var help:TextField=modal["help"];var hfmt:TextFormat=help.getTextFormat();help.text="Enter: apply | Esc: cancel | 5 to 2000";help.setTextFormat(hfmt);
+  Selection.setFocus(searchField);Selection.setSelection(0,searchField.text.length);
+ }
  function closeSearch():Void {modalOpen=false;Selection.setFocus(null);modal.removeMovieClip();searchField=null;}
  function emit(value:String):Void {if(actionQueue.length<32)actionQueue.push(value);}
  function back():Void {if(!shown)return;if(view>0) {view--;if(view==0)queryKey="HOME";focus=0;draw();}else emit("close");}
  function activate():Void {
   var action:String=entries[focus].action;if(action=="none")return;
   if(action=="open_search") {openSearch();return;}
+  if(action=="esp_range_edit") {openRangeInput();return;}
   if(action=="hotkey_next") {emit("hotkey:"+candidateKey);return;}
   if(action=="noclip_hotkey_next") {emit("noclip_hotkey:"+candidateNoclipKey);return;}
   if(action.substr(0,9)=="category:") {active="ASSETS";queryKey=action.substr(9);view=1;focus=0;assets=[];detail="";emit("filter;"+escape(queries[queryKey]==undefined?"":queries[queryKey])+";"+action.substr(9)+";");emit("tab:ASSETS");draw();}
@@ -184,6 +216,7 @@ class ModMasterMenu {
  function keyDown():Void {
   var code:Number=Key.getCode();
   if(modalOpen) {
+   if(code==13 && inputMode=="esp_range") {var range:String=searchField.text;closeSearch();inputMode="";if(range.length>0) {espRange=range;emit("esp_range:"+range);}draw();return;}
    if(code==13) {var query:String=searchField.text;closeSearch();focus=0;if(view==0 && query.length>0) {queries["HOME"]="";queryKey="all";queries["all"]=query;active="ASSETS";view=1;assets=[];detail="";emit("filter;"+escape(query)+";;");emit("tab:ASSETS");draw();return;}queries[queryKey]=query;if((active=="ASSETS" || active=="SPAWNS") && view>0)emit("search:"+escape(query));draw();}
    else if(code==27)closeSearch();
    else if(code==65 && Key.isDown(17))Selection.setSelection(0,searchField.text.length);

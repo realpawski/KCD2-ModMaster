@@ -330,3 +330,71 @@ def test_photo_mode_range_is_widened_and_restored():
  assert lua.eval('cvars.wh_photomode_MaxDistance')==100000
  event(lua,'photomode:default')
  assert lua.eval('cvars.wh_photomode_MaxDistance')==20
+
+
+def test_souls_spawn_through_the_ai_module_and_are_tracked():
+ lua=runtime()
+ lua.execute('''
+  aiCalls={};entities={}
+  local function make(id,name) local e={id=id,GetName=function() return name end,GetWorldPos=function() return {x=0,y=3,z=0} end,
+   GetWorldAngles=function() return {x=0,y=0,z=0} end,GetScale=function() return 1 end};entities[id]=e;return e end
+  XGenAIModule={SpawnEntity=function(p) table.insert(aiCalls,p);return "wuid"..#aiCalls end,
+   GetEntityByWUID=function(w) return make(100+#aiCalls,aiCalls[#aiCalls].Name) end}
+  System.GetEntity=function(id) return entities[id] end;System.RemoveEntity=function(id) entities[id]=nil end
+  ModMasterDev:SpawnSoul({id="soul:x",name="Hans",soul_guid="0a1b2c3d-0000-0000-0000-000000000001",archetype="NPC",category="npcs"},{x=0,y=3,z=0})
+  ModMasterDev:SpawnSoul({id="soul:Boar",name="Random Boar",archetype="Boar",category="animals"},{x=0,y=3,z=0})
+ ''')
+ assert lua.eval('aiCalls[1].SharedSoulGuid')=='0a1b2c3d-0000-0000-0000-000000000001'
+ assert lua.eval('aiCalls[1].SoulArchetypeName==nil and aiCalls[2].SoulArchetypeName=="Boar" and aiCalls[2].SharedSoulGuid==nil')
+ assert lua.eval('#ModMasterDev:ActiveSpawns()')==2
+ lua.execute('ModMasterDev:Clear()')
+ assert lua.eval('#ModMasterDev.spawns')==0
+
+
+def test_late_soul_entities_are_picked_up_and_horses_fall_back_to_the_class():
+ lua=runtime()
+ lua.execute('''
+  byName={}
+  XGenAIModule={SpawnEntity=function(p) return nil end}
+  System.GetEntityByName=function(n) return byName[n] end
+  System.GetEntity=function(id) for _,e in pairs(byName) do if e.id==id then return e end end end
+  horses={};System.SpawnEntity=function(spec) table.insert(horses,spec);return nil end
+  ModMasterDev:SpawnSoul({id="soul:Horse",name="Random Horse",archetype="Horse",category="animals"},{x=0,y=3,z=0})
+  byName.ModMasterSoul_1={id=7,GetName=function() return "ModMasterSoul_1" end}
+  timers[#timers]()
+ ''')
+ assert lua.eval('horses[1].class')=='Horse'
+ assert lua.eval('ModMasterDev.spawns[1].id')==7
+
+
+def test_mouse_wheel_changes_flight_speed_without_touching_movement():
+ lua=runtime();open_menu(lua);event(lua,'tab:PLAYER');event(lua,'noclip')
+ act(lua,'modmaster_fly_speed_up')
+ assert abs(lua.eval('ModMasterDev.settings.freecamSpeed')-6.25)<1e-9
+ act(lua,'modmaster_fly_speed_down');act(lua,'modmaster_fly_speed_down')
+ assert abs(lua.eval('ModMasterDev.settings.freecamSpeed')-4.0)<1e-9
+ act(lua,'modmaster_fly_forward')
+ lua.execute('fakeTime=0.1;ModMasterDev:NoclipTick(ModMasterDev.noclip)')
+ assert abs(lua.eval('worldPos.y')-0.4)<1e-9
+ assert lua.eval('#passedActions')==0
+ for _ in range(40): act(lua,'modmaster_fly_speed_down')
+ assert lua.eval('ModMasterDev.settings.freecamSpeed')==0.5
+
+
+def test_esp_labels_nearby_creatures_with_distance_and_keeps_an_overlay():
+ lua=runtime()
+ lua.execute('''
+  System.GetViewCameraFov=function() return math.rad(60) end
+  local function npc(name,x,y) return {id=name,soul={},GetName=function() return name end,GetWorldPos=function() return {x=x,y=y,z=0} end} end
+  System.GetEntitiesInSphere=function(c,r) sphere=r;return {g_localActor,npc("Hans",0,10),npc("Behind",0,-10),{id="rock",GetWorldPos=function() return {x=0,y=5,z=0} end}} end
+  ModMasterDev:ToggleEsp()
+ ''')
+ assert lua.eval('ModMasterDev.esp==true and visible and sphere==100')
+ labels=[c for c in lua.eval('calls').values() if c[3]=='Esp']
+ text=labels[-1][4]
+ assert text.startswith('50.00|') and 'Hans  10m' in text and 'Behind' not in text and 'rock' not in text
+ open_menu(lua)
+ event(lua,'esp_range:250');assert lua.eval('ModMasterDev.espRange')==250
+ event(lua,'esp_range:abc');event(lua,'esp_range:99999');assert lua.eval('ModMasterDev.espRange')==250
+ event(lua,'close');assert lua.eval('visible')  # overlay stays for the labels
+ lua.execute('ModMasterDev:ToggleEsp()');assert lua.eval('not visible')

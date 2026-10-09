@@ -52,6 +52,16 @@
       <function name="Noclip" funcname="fc_noclip">
         <param name="Enabled" type="bool" />
       </function>
+      <function name="Overlay" funcname="fc_overlay">
+        <param name="Enabled" type="bool" />
+      </function>
+      <function name="Esp" funcname="fc_esp">
+        <param name="Data" type="string" />
+      </function>
+      <function name="EspState" funcname="fc_esp_state">
+        <param name="Enabled" type="bool" />
+        <param name="Range" type="string" />
+      </function>
     </functions>
     <events>
       <event name="Action" fscommand="modmasterAction">

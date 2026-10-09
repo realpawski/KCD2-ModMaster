@@ -27,7 +27,7 @@ from database.scanner import scan
 from ui import theme
 from ui.console import ConsoleWidget
 from app import updater
-from app.version import APP_NAME, CHANNEL, display_version
+from app.version import APP_NAME, CHANNEL, VERSION, display_version
 from ui.dialogs.update_dialog import UpdateDialog
 from ui.context import AppContext
 from ui.icons import get_svg_icon
@@ -129,6 +129,8 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.showMaximized)
         if getattr(sys, "frozen", False) and self.settings.check_updates_on_start:
             QTimer.singleShot(4000, self.check_for_updates)
+        if getattr(sys, "frozen", False) and self.settings.last_run_version != VERSION:
+            QTimer.singleShot(2500, self._after_update)
 
         # First-run auto-detection if game path is unset
         if not self.settings.game_dir:
@@ -210,6 +212,36 @@ class MainWindow(QMainWindow):
 
         task.signals.finished.connect(done)
         task.signals.failed.connect(failed)
+        self.ctx.tasks.start(task)
+
+    def _after_update(self) -> None:
+        """Brings the in-game menu and the Blender add-on up to the version that just got installed."""
+        previous = self.settings.last_run_version
+        self.settings.last_run_version = VERSION
+        self.settings.save()
+        if not previous:
+            return
+        self.console.append("OK", f"Updated from {previous} to {VERSION}. Your settings and workspace were kept.")
+        try:
+            from blender.bridge_manager import BlenderBridgeManager
+            refreshed = BlenderBridgeManager.get_instance(self.settings).refresh_installed_addons()
+            if refreshed:
+                self.console.append("OK", "Blender add-on updated. Restart Blender to load it.")
+        except Exception as e:
+            log.warning("Blender add-on refresh after update failed: %s", e)
+        if not self.settings.game_dir:
+            return
+        from runtime_tools.manager import RuntimeManager
+        from ui.pages.runtime_tools import game_running
+        manager = RuntimeManager(Path(self.settings.game_dir), self.settings.workspace)
+        if manager.status().state != "Update available":
+            return
+        if game_running() == "Running":
+            self.console.append("WARN", "Close the game, then update the in-game menu under Settings > In-game menu.")
+            return
+        task = Task("Update in-game menu", lambda _ctx: manager.sync())
+        task.signals.finished.connect(lambda _r: self.console.append("OK", "In-game menu updated. Restart the game to load it."))
+        task.signals.failed.connect(lambda m: self.console.append("WARN", f"In-game menu not updated: {m}"))
         self.ctx.tasks.start(task)
 
     def _auto_detect_first_run(self) -> None:

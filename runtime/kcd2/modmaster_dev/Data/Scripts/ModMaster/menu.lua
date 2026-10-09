@@ -27,6 +27,8 @@ function ModMasterDev:CloseMenu(reason)
     if self.noclip then
         local kind=self.noclip.kind
         self:Guard(function() self:UI(kind,true) end)
+    elseif self.esp then
+        self:Guard(function() self:UI("Overlay",true) end)
     elseif UIAction and UIAction.HideElement and not self.hiding then
         self.hiding=true;pcall(UIAction.HideElement,"ModMasterMenu",0);self.hiding=false
     end
@@ -55,7 +57,8 @@ function ModMasterDev:RefreshMenu()
         if self.tab=="SPAWNS" then
             pos=entry.entity:GetWorldPos();rot=entry.entity:GetWorldAngles();scale=entry.entity:GetScale()
         end
-        local typeDesc=a.spawn_type=="inventory_item" and "GAME ITEM (Equippable)" or "STATIC PROP"
+        local typeDesc=a.spawn_type=="inventory_item" and "GAME ITEM (Equippable)" or
+            a.spawn_type=="soul" and ((a.category=="animals" and "ANIMAL" or "NPC") .. " with AI (" .. tostring(a.archetype) .. ")") or "STATIC PROP"
         local idDesc=a.item_guid and ("GUID: " .. a.item_guid) or ("ID: " .. a.id)
         self:UI("Details",a.name .. "\n" .. idDesc .. "\nType: " .. typeDesc .. "\nStatus: " .. a.status,
             tostring(pos.x),tostring(pos.y),tostring(pos.z),tostring(rot.x),tostring(rot.y),tostring(rot.z),tostring(scale))
@@ -64,6 +67,7 @@ function ModMasterDev:RefreshMenu()
     self:UI("Settings",self.settings.hotkey,self.settings.keyCode,self.settings.hudEnabled,
         tostring(self.settings.freecamSpeed),tostring(self.settings.fastMult),tostring(self.settings.slowMult),
         self.settings.noclipHotkey)
+    self:UI("EspState",self.esp==true,tostring(self.espRange or ModMasterEspDefaultRange))
     self:UI("Status",self.message,"Runtime " .. self.version .. " | Assets " .. #self.assets .. " | Owned spawns " .. #self.spawns .. " | Freecam speed " .. self.settings.freecamSpeed)
 end
 
@@ -125,6 +129,8 @@ function ModMasterDev:OnUIAction(element,instance,event,args)
         elseif action:sub(1,14)=="noclip_hotkey:" then self:BindNoclipKey(action:sub(15))
         elseif action=="god" then self:ToggleGod()
         elseif action=="heal" then self:RestoreHealth()
+        elseif action=="esp_toggle" then self:ToggleEsp()
+        elseif action:sub(1,10)=="esp_range:" then self:SetEspRange(action:sub(11))
         elseif action:sub(1,10)=="photomode:" then self:PhotoModeRange(action:sub(11)=="unlimited")
         elseif action=="restore_player" then self:RestorePlayerOptions()
         elseif action:sub(1,5)=="time:" then self:TimeOfDay(action:sub(6))
@@ -187,6 +193,7 @@ function ModMasterDev:Toggle()
     local ok,err=pcall(function()
         self:ApplyMenuInput()
         UIAction.ShowElement("ModMasterMenu",0)
+        if self.esp then self:UI("Overlay",false) end
         self:WatchMenu(self.tickGeneration,0)
     end)
     if not ok then self:CloseMenu("Menu open failed; input restored: " .. tostring(err)) end

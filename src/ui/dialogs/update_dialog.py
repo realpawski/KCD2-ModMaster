@@ -100,7 +100,10 @@ class UpdateDialog(QDialog):
         except OSError as exc:
             self._on_failed(f"Could not start the installer: {exc}")
             return
-        QApplication.instance().quit()
+        # Closing the windows runs their save handlers before the installer replaces the program files.
+        app = QApplication.instance()
+        app.closeAllWindows()
+        app.quit()
 
     def _on_failed(self, message: str) -> None:
         self.progress.setVisible(False)

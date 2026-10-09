@@ -1,4 +1,4 @@
-ModMasterDev = {version="0.5.5", registryVersion=1, opened=false, assets={},
+ModMasterDev = {version="0.5.6", registryVersion=1, opened=false, assets={},
     spawns={}, selected=1, spawnSelected=1, tab="ASSETS", search="", category="", modFilter="",
     serial=0, timer=nil, message="Runtime loaded; in-game acceptance pending", locations={},
     settings={hotkey="f5",keyCode=116,noclipHotkey="f4",hudEnabled=true,freecamSpeed=5.0,fastMult=4.0,slowMult=0.25}}
@@ -43,7 +43,7 @@ function ModMasterDev:LoadRegistry()
     end
     -- Skip bad entries instead of discarding the whole registry.
     local assets, keys = {}, {}
-    local counts = {static_prop=0, inventory_item=0, unsupported=0, vanilla=0, custom=0}
+    local counts = {static_prop=0, inventory_item=0, soul=0, unsupported=0, vanilla=0, custom=0}
     local categories = {}
     for _, mod in ipairs(data.mods) do
         for _, asset in ipairs(mod.assets) do
@@ -54,7 +54,11 @@ function ModMasterDev:LoadRegistry()
             end
             if type(asset) ~= "table" or type(asset.id) ~= "string" or type(asset.name) ~= "string" then
                 reject("Registry entry skipped (" .. mod.id .. "): missing id/name")
-            elseif asset.spawn_type ~= "static_prop" and asset.spawn_type ~= "inventory_item" then
+            elseif asset.spawn_type == "soul" and not ((type(asset.soul_guid) == "string" and
+                asset.soul_guid:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$")) or
+                (type(asset.archetype) == "string" and asset.archetype:match("^[%w_]+$"))) then
+                reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): soul needs a GUID or archetype")
+            elseif asset.spawn_type ~= "static_prop" and asset.spawn_type ~= "inventory_item" and asset.spawn_type ~= "soul" then
                 reject("Registry entry skipped (" .. mod.id .. ":" .. tostring(asset.id) .. "): unsupported spawn_type")
             elseif asset.spawn_type == "static_prop" and (type(asset.model_path) ~= "string" or
                 asset.model_path:find("..", 1, true) or asset.model_path:find(":", 1, true) or

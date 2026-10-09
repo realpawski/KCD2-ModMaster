@@ -62,12 +62,71 @@ function ModMasterDev:SpawnAsset(asset, pos)
     return entity
 end
 
+-- NPCs and animals come to life through the AI module: a soul gives them brain, schedule and animations.
+function ModMasterDev:FindSpawned(ai,result,name)
+    if type(result)=="table" and result.id then return result end
+    if result~=nil and ai and ai.GetEntityByWUID then
+        local ok,entity=pcall(ai.GetEntityByWUID,result)
+        if ok and type(entity)=="table" and entity.id then return entity end
+    end
+    if System.GetEntityByName then
+        local ok,entity=pcall(System.GetEntityByName,name)
+        if ok and type(entity)=="table" and entity.id then return entity end
+    end
+end
+
+function ModMasterDev:TrackSoul(entity,name,asset,pos,yaw)
+    table.insert(self.spawns,{id=entity.id,entity=entity,name=name,asset=asset,
+        original={position=self:CopyVector(pos),rotation={x=0,y=0,z=yaw},scale=1}})
+    self.spawnSelected=#self.spawns
+    self:Log("Spawned " .. asset.name .. " as " .. name)
+    return entity
+end
+
+function ModMasterDev:SpawnSoul(asset,pos)
+    local ai=rawget(_G,"XGenAIModule")
+    self.serial=self.serial+1
+    local name="ModMasterSoul_" .. self.serial
+    local yaw=0
+    local okDir,dir=pcall(System.GetViewCameraDir)
+    if okDir and type(dir)=="table" then yaw=math.atan2(-dir.x,dir.y)+math.pi end
+    local result,err
+    if type(ai)=="table" and type(ai.SpawnEntity)=="function" then
+        local params={Name=name,Pos=pos,Rot={x=0,y=0,z=yaw}}
+        if asset.soul_guid then params.SharedSoulGuid=asset.soul_guid else params.SoulArchetypeName=asset.archetype end
+        local ok,value=pcall(ai.SpawnEntity,params)
+        if ok then result=value else err=value end
+    end
+    local entity=self:FindSpawned(ai,result,name)
+    if not entity and asset.archetype=="Horse" and System.SpawnEntity then
+        local ok,horse=pcall(System.SpawnEntity,{class="Horse",name=name,position=pos,orientation={x=0,y=1,z=0}})
+        if ok and type(horse)=="table" and horse.id then entity=horse end
+    end
+    if entity then return self:TrackSoul(entity,name,asset,pos,yaw) end
+    if err then return self:Log("The game rejected the spawn: " .. tostring(err)) end
+    -- The AI module can create the entity a few frames later.
+    if Script and Script.SetTimer then
+        Script.SetTimer(750,function()
+            self:Guard(function()
+                local late=self:FindSpawned(ai,nil,name)
+                if late then self:TrackSoul(late,name,asset,pos,yaw);self:RefreshMenu()
+                else self:Log("Spawn of " .. asset.name .. " did not appear") end
+            end)
+        end)
+    end
+    self:Log("Spawning " .. asset.name .. "...")
+end
+
 function ModMasterDev:SpawnSelected(mode)
     if not self.opened then return end
     local asset=self:FilteredAssets()[self.selected]
     if not asset then return self:Log("No compatible selected asset") end
-    if asset.spawn_type~="static_prop" then return self:Log("Weapons and armor use Give to Inventory") end
     local pos,err=self:Placement(mode)
+    if asset.spawn_type=="soul" then
+        if not pos then return self:Log(err) end
+        return self:SpawnSoul(asset,pos)
+    end
+    if asset.spawn_type~="static_prop" then return self:Log("Weapons and armor use Give to Inventory") end
     if not pos then return self:Log(err) end
     return self:SpawnAsset(asset,pos)
 end
@@ -107,7 +166,7 @@ function ModMasterDev:DuplicateSelected()
     if not e then return end
     local p=e.entity:GetWorldPos();p={x=p.x+0.5,y=p.y,z=p.z}
     local rotation=self:CopyVector(e.entity:GetWorldAngles());local scale=e.entity:GetScale()
-    local copy=self:SpawnAsset(e.asset,p)
+    local copy=e.asset.spawn_type=="soul" and self:SpawnSoul(e.asset,p) or self:SpawnAsset(e.asset,p)
     if copy then copy:SetWorldAngles(rotation);copy:SetScale(scale) end
 end
 

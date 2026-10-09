@@ -79,7 +79,8 @@ end
 ModMasterFlightMap="modmaster_flight"
 ModMasterFlyActions={modmaster_fly_forward="forward",modmaster_fly_back="back",modmaster_fly_left="left",
     modmaster_fly_right="right",modmaster_fly_up="up",modmaster_fly_down="down",modmaster_fly_fast="fast",
-    modmaster_fly_precise="precise",moveforward="forward",moveback="back",moveleft="left",moveright="right",
+    modmaster_fly_precise="precise",modmaster_fly_speed_up="speed_up",modmaster_fly_speed_down="speed_down",
+    moveforward="forward",moveback="back",moveleft="left",moveright="right",
     jump="up",toggle_crouch="down",crouch="down",sprint="fast"}
 
 function ModMasterDev:FlightMap(p,on)
@@ -115,10 +116,22 @@ function ModMasterDev:FlightAction(action,activation)
     local keys=self.flyKeys
     if role=="precise" then
         if activation=="press" then keys.precise=not keys.precise end
+    elseif role=="speed_up" or role=="speed_down" then
+        if activation=="press" then self:ChangeFlightSpeed(role=="speed_up" and 1.25 or 0.8) end
     else
         keys[role]=activation~="release"
     end
     return true
+end
+
+-- Modifier keys never reach an action map, so the mouse wheel sets the flight speed.
+function ModMasterDev:ChangeFlightSpeed(factor)
+    local s=self.settings
+    s.freecamSpeed=math.max(0.5,math.min(200,math.floor(s.freecamSpeed*factor*100+0.5)/100))
+    self:Guard(function()
+        self:UI("Settings",s.hotkey,s.keyCode,s.hudEnabled,tostring(s.freecamSpeed),tostring(s.fastMult),
+            tostring(s.slowMult),s.noclipHotkey)
+    end)
 end
 
 function ModMasterDev:FlightHud(kind,on)
@@ -165,7 +178,7 @@ function ModMasterDev:StopNoclip(quiet)
     if self.noclipTimer and Script.KillTimer then pcall(Script.KillTimer,self.noclipTimer) end;self.noclipTimer=nil
     if f.entity==self:PlayerEntity() then self:Guard(function() f.entity:SetColliderMode(ModMasterColliderNormal) end) end
     self:Guard(function() self:UI(f.kind,false) end)
-    if self.opened then self:Guard(function() self:ApplyMenuInput() end) else pcall(UIAction.HideElement,"ModMasterMenu",0) end
+    if self.opened then self:Guard(function() self:ApplyMenuInput() end) else self:Overlay(self.esp) end
     if not quiet then self:Log("Noclip disabled; normal collision restored") end
 end
 

@@ -159,7 +159,7 @@ def download_installer(release: Release, progress: Callable[[int, int], None] | 
 
 
 def launch_installer(path: Path) -> None:
-    """Start the installer detached; it closes the running app and restarts it when done."""
+    """Start the installer detached; it replaces the program files in place and starts the app again."""
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0
-    subprocess.Popen([str(path), "/SILENT", "/SP-", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"],
+    subprocess.Popen([str(path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/CLOSEAPPLICATIONS"],
                      close_fds=True, creationflags=flags)

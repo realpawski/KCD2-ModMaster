@@ -42,6 +42,7 @@ class Settings:
     default_author: str = ""
     check_updates_on_start: bool = True
     skipped_update: str = ""
+    last_run_version: str = ""
 
     _path: Path | None = field(default=None, repr=False, compare=False)
 

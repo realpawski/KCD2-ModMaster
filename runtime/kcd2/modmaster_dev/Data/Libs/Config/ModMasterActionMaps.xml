@@ -8,5 +8,7 @@
     <action name="modmaster_fly_down" onPress="1" onRelease="1" noModifiers="0" keyboard="c" />
     <action name="modmaster_fly_fast" onPress="1" onRelease="1" noModifiers="0" keyboard="lshift" />
     <action name="modmaster_fly_precise" onPress="1" noModifiers="0" keyboard="capslock" />
+    <action name="modmaster_fly_speed_up" onPress="1" noModifiers="0" keyboard="mwheel_up" />
+    <action name="modmaster_fly_speed_down" onPress="1" noModifiers="0" keyboard="mwheel_down" />
   </actionmap>
 </actionmaps>
