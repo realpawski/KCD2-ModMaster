@@ -332,41 +332,41 @@ def test_photo_mode_range_is_widened_and_restored():
  assert lua.eval('cvars.wh_photomode_MaxDistance')==20
 
 
-def test_souls_spawn_through_the_ai_module_and_are_tracked():
+def test_souls_spawn_as_their_class_with_the_chosen_soul_and_are_tracked():
  lua=runtime()
  lua.execute('''
-  aiCalls={};entities={}
-  local function make(id,name) local e={id=id,GetName=function() return name end,GetWorldPos=function() return {x=0,y=3,z=0} end,
-   GetWorldAngles=function() return {x=0,y=0,z=0} end,GetScale=function() return 1 end};entities[id]=e;return e end
-  XGenAIModule={SpawnEntity=function(p) table.insert(aiCalls,p);local id=100+#aiCalls;make(id,p.Name);return id end}
+  specs={};entities={}
+  System.SpawnEntity=function(spec) table.insert(specs,spec);local id=100+#specs
+   local e={id=id,soul={},GetName=function() return spec.name end,GetWorldPos=function() return spec.position end,
+    GetWorldAngles=function() return {x=0,y=0,z=0} end,GetScale=function() return 1 end};entities[id]=e;return e end
   System.GetEntity=function(id) return entities[id] end;System.RemoveEntity=function(id) entities[id]=nil end
+  NPC={Properties={fileModel="male.cdf",NPC={aianchorHome=""}},OnReset=function() end}
+  Boar={Properties={fileModel="boar.cdf"}}
   ModMasterDev.assets={{id="soul:b1",spawn_type="soul",archetype="Boar",soul_guid="0a1b2c3d-0000-0000-0000-0000000000b1"}}
   ModMasterDev:SpawnSoul({id="soul:x",name="Hans",soul_guid="0a1b2c3d-0000-0000-0000-000000000001",archetype="NPC",entity_class="NPC",category="npcs"},{x=0,y=3,z=0})
   ModMasterDev:SpawnSoul({id="soul:Boar",name="Random Boar",archetype="Boar",entity_class="Boar",category="animals"},{x=0,y=3,z=0})
   ModMasterDev:SpawnSoul({id="soul:Wolf",name="Random Wolf",archetype="Wolf",entity_class="Wolf",category="animals"},{x=0,y=3,z=0})
  ''')
- assert lua.eval('aiCalls[1].SharedSoulGuid')=='0a1b2c3d-0000-0000-0000-000000000001'
- assert lua.eval('aiCalls[1].ClassName=="NPC" and aiCalls[2].ClassName=="Boar"')
- assert lua.eval('aiCalls[2].SharedSoulGuid')=='0a1b2c3d-0000-0000-0000-0000000000b1'
- assert lua.eval('#aiCalls')==2  # no Wolf soul known, nothing requested
+ assert lua.eval('specs[1].class=="NPC" and specs[2].class=="Boar"')
+ assert lua.eval('specs[1].properties.guidSharedSoulId')=='0a1b2c3d-0000-0000-0000-000000000001'
+ assert lua.eval('specs[1].properties.fileModel=="male.cdf" and specs[1].properties.NPC~=NPC.Properties.NPC')
+ assert lua.eval('specs[2].properties.guidSharedSoulId')=='0a1b2c3d-0000-0000-0000-0000000000b1'
+ assert lua.eval('NPC.Properties.guidSharedSoulId==nil')  # class defaults stay untouched
+ assert lua.eval('#specs')==2  # no Wolf soul known, nothing requested
  assert lua.eval('#ModMasterDev:ActiveSpawns()')==2
  lua.execute('ModMasterDev:Clear()')
  assert lua.eval('#ModMasterDev.spawns')==0
 
 
-def test_late_soul_entities_are_picked_up_and_horses_fall_back_to_the_class():
+def test_unloaded_classes_spawn_with_their_default_soul():
  lua=runtime()
  lua.execute('''
-  byName={}
-  XGenAIModule={SpawnEntity=function(p) return nil end}
-  System.GetEntityByName=function(n) return byName[n] end
-  System.GetEntity=function(id) for _,e in pairs(byName) do if e.id==id then return e end end end
-  horses={};System.SpawnEntity=function(spec) table.insert(horses,spec);return nil end
+  specs={}
+  System.SpawnEntity=function(spec) table.insert(specs,spec);return {id=7,GetName=function() return spec.name end} end
+  System.GetEntity=function(id) end
   ModMasterDev:SpawnSoul({id="soul:h",name="Horse2",soul_guid="0a1b2c3d-0000-0000-0000-0000000000a1",archetype="Horse",entity_class="Horse",category="animals"},{x=0,y=3,z=0})
-  byName.ModMasterSoul_1={id=7,GetName=function() return "ModMasterSoul_1" end}
-  timers[#timers]()
  ''')
- assert lua.eval('horses[1].class')=='Horse'
+ assert lua.eval('#specs==1 and specs[1].class=="Horse" and specs[1].properties==nil')
  assert lua.eval('ModMasterDev.spawns[1].id')==7
 
 
