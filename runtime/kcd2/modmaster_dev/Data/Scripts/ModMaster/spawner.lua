@@ -166,10 +166,39 @@ function ModMasterDev:ApplyLook(entity,asset,model,attempt)
     if System.GetEntity and System.GetEntity(entity.id)~=entity then return end
     local ok,err=pcall(entity.LoadCharacter,entity,0,model)
     if attempt==1 then
+        if entity.Hide then pcall(entity.Hide,entity,0) end
         self:Log(asset.name .. " look " .. model .. ": " .. (ok and "loaded" or ("failed: " .. tostring(err))))
     end
     if ok and attempt<3 and Script and Script.SetTimer then
         Script.SetTimer(attempt*1500,function() self:Guard(function() self:ApplyLook(entity,asset,model,attempt+1) end) end)
+    end
+end
+
+-- Animal brains do not follow anyone, so a friend of Henry is walked back to him when it strays.
+function ModMasterDev:FollowTick(entity,asset,tick)
+    if System.GetEntity and System.GetEntity(entity.id)~=entity then return end
+    local soul=entity.soul
+    if soul and soul.GetState then
+        local ok,hp=pcall(soul.GetState,soul,"health")
+        if ok and type(hp)=="number" and hp<=0 then return end
+    end
+    local p=self:PlayerEntity()
+    local ai=rawget(_G,"AI")
+    if p and type(ai)=="table" and ai.GoTo then
+        local a,b=p:GetWorldPos(),entity:GetWorldPos()
+        local dx,dy=b.x-a.x,b.y-a.y
+        local dist=math.sqrt(dx*dx+dy*dy)
+        if dist>5 then
+            local back=dist>0.1 and 2.5/dist or 0
+            local ok,err=pcall(ai.GoTo,entity.id,{x=a.x+dx*back,y=a.y+dy*back,z=a.z})
+            if tick==1 or not ok then self:Log(asset.name .. " follows Henry: " .. (ok and "on its way" or tostring(err))) end
+        end
+    elseif tick==1 then
+        self:Log(asset.name .. ": AI.GoTo is unavailable, it cannot follow Henry")
+        return
+    end
+    if Script and Script.SetTimer then
+        Script.SetTimer(1000,function() self:Guard(function() self:FollowTick(entity,asset,tick+1) end) end)
     end
 end
 
@@ -221,8 +250,11 @@ function ModMasterDev:SpawnSoul(asset,pos)
             tostring(entity.soul~=nil),clothing or model or "game"))
         self:ApplyCreature(entity,asset)
         if model and entity.LoadCharacter and Script and Script.SetTimer then
-            Script.SetTimer(500,function() self:Guard(function() self:ApplyLook(entity,asset,model,1) end) end)
+            -- Hidden until the custom look is on, so the plain game body never shows.
+            if entity.Hide then pcall(entity.Hide,entity,1) end
+            Script.SetTimer(150,function() self:Guard(function() self:ApplyLook(entity,asset,model,1) end) end)
         end
+        if asset.follow then self:FollowTick(entity,asset,1) end
         return self:TrackSoul(entity,name,asset,pos,yaw)
     end
     self:Log("Spawn of " .. asset.name .. " failed (class " .. class .. ", soul " .. guid .. ")" .. (err and (": " .. tostring(err)) or ""))

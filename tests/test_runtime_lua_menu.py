@@ -407,6 +407,26 @@ def test_registry_rejects_unsafe_creature_values():
  assert lua.eval('#ModMasterDev.assets')==1
 
 
+def test_friends_of_henry_are_walked_back_and_spawn_hidden_until_their_look_is_on():
+ lua=runtime()
+ lua.execute('''
+  spawned={};hidden={};goto={}
+  System.SpawnEntity=function(spec) local e={id=#spawned+1,soul={},GetName=function() return spec.name end,
+   GetWorldPos=function() return {x=20,y=0,z=0} end,LoadCharacter=function() end,
+   Hide=function(self,h) table.insert(hidden,h) end};spawned[e.id]=e;return e end
+  System.GetEntity=function(id) return spawned[id] end
+  AI={GoTo=function(id,pos) table.insert(goto,pos) end}
+  Boar={Properties={fileModel="boar.cdf"}}
+  ModMasterDev:SpawnSoul({id="creature:pal",name="Pal",spawn_type="soul",archetype="Boar",entity_class="Boar",
+   category="animals",soul_guid="0a1b2c3d-0000-0000-0000-00000000aaaa",model_path="Objects/modmaster/pal/pal.cdf",
+   follow=true,source="compiled_custom"},{x=20,y=0,z=0})
+ ''')
+ assert lua.eval('hidden[1]')==1  # hidden right after the spawn
+ assert lua.eval('#goto')==1 and abs(lua.eval('goto[1].x')-2.5)<1e-9  # walked to 2.5 m from Henry
+ lua.execute('for i=#timers,1,-1 do local fn=timers[i];timers[i]=function() end;fn() end')
+ assert lua.eval('hidden[#hidden]')==0  # shown again once the look is loaded
+
+
 def test_unloaded_classes_spawn_with_their_default_soul():
  lua=runtime()
  lua.execute('''
@@ -437,14 +457,14 @@ def test_esp_labels_nearby_creatures_with_distance_and_keeps_an_overlay():
  lua=runtime()
  lua.execute('''
   System.GetViewCameraFov=function() return math.rad(60) end
-  local function npc(name,x,y) return {id=name,soul={},GetName=function() return name end,GetWorldPos=function() return {x=x,y=y,z=0} end} end
+  local function npc(name,x,y) return {id=name,soul={GetState=function(s,n) return 37.4 end},GetName=function() return name end,GetWorldPos=function() return {x=x,y=y,z=0} end} end
   System.GetEntitiesInSphere=function(c,r) sphere=r;return {g_localActor,npc("Hans",0,10),npc("Behind",0,-10),{id="rock",GetWorldPos=function() return {x=0,y=5,z=0} end}} end
   ModMasterDev:ToggleEsp()
  ''')
  assert lua.eval('ModMasterDev.esp==true and visible and sphere==100')
  labels=[c for c in lua.eval('calls').values() if c[3]=='Esp']
  text=labels[-1][4]
- assert text.startswith('50.0|') and 'Hans  10m' in text and 'Behind' not in text and 'rock' not in text
+ assert text.startswith('50.0|') and '|37|Hans  10m' in text and 'Behind' not in text and 'rock' not in text
  lua.execute('sphere=nil;System.GetViewCameraDir=function() return {x=0.1,y=1,z=0} end;timers[#timers]()')
  labels=[c for c in lua.eval('calls').values() if c[3]=='Esp']
  assert lua.eval('sphere')is None and not labels[-1][4].startswith('50.0|')  # moved with the camera, no new query

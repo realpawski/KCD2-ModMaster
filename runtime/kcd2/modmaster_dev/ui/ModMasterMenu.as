@@ -5,7 +5,7 @@ class ModMasterMenu {
  var view:Number;var active:String;var entries:Array;var assets:Array;var focus:Number;var total:Number;
  var candidateKey:String;var candidateNoclipKey:String;var modalOpen:Boolean;var modal:MovieClip;var searchField:TextField;var queries:Object;var queryKey:String;
  var shiftHeld:Boolean;var ctrlHeld:Boolean;
- var espLayer:MovieClip;var espFields:Array;var espFormat:TextFormat;var overlayOnly:Boolean;var espOn:Boolean;var espRange:String;var inputMode:String;
+ var espLayer:MovieClip;var espFields:Array;var espBars:Array;var espFormat:TextFormat;var overlayOnly:Boolean;var espOn:Boolean;var espRange:String;var inputMode:String;
  var cameraOnly:Boolean;var noclipHud:Boolean;var hotkey:String;var keyCode:Number;var hudEnabled:Boolean;var kind:String;
  var detail:String;var message:String;var god:String;var noclipStatus:String;var freecamStatus:String;var values:Array;var settingValues:Array;
  static function main(mc:MovieClip):Void {app=new ModMasterMenu(mc);}
@@ -142,22 +142,40 @@ class ModMasterMenu {
   else {_global.gfxExtensions=true;tf["shadowStyle"]="s{1,0}{-1,0}{0,1}{0,-1}";tf["shadowColor"]=0x000000;}
   espFields[index]=tf;return tf;
  }
+ function espBar(index:Number,hp:Number):MovieClip {
+  var bar:MovieClip=espBars[index];
+  if(bar==undefined) {bar=espLayer.createEmptyMovieClip("bar"+index,5000+index);espBars[index]=bar;bar["hp"]=-2;}
+  if(bar["hp"]!=hp) {
+   // A slim pastel bar under the name; the red part shrinks as the creature takes damage.
+   bar.clear();
+   bar.beginFill(0x000000,70);bar.moveTo(0,0);bar.lineTo(62,0);bar.lineTo(62,6);bar.lineTo(0,6);bar.lineTo(0,0);bar.endFill();
+   var w:Number=Math.round(60*hp/100);
+   if(w>0) {bar.beginFill(0xE8A0A0,95);bar.moveTo(1,1);bar.lineTo(1+w,1);bar.lineTo(1+w,5);bar.lineTo(1,5);bar.lineTo(1,1);bar.endFill();}
+   bar["hp"]=hp;
+  }
+  return bar;
+ }
  function drawEsp(data:String):Void {
   if(espLayer==undefined) {
-   espLayer=root.createEmptyMovieClip("espLayer",90000);espFields=[];
+   espLayer=root.createEmptyMovieClip("espLayer",90000);espFields=[];espBars=[];
    espFormat=new TextFormat();espFormat.font="ModMaster Sans";espFormat.size=13;espFormat.color=0xF2D58A;espFormat.align="center";
   }
   var rows:Array=(data==undefined || data=="")?[]:data.split("\n");
   var used:Number=0;
   for(var r:Number=0;r<rows.length;r++) {
-   var parts:Array=rows[r].split("|");if(parts.length<3)continue;
-   var tf:TextField=espField(used++);
-   tf._x=Number(parts[0])*12.8-130;tf._y=Number(parts[1])*7.2-20;
-   var text:String=parts.slice(2).join("|");
+   var parts:Array=rows[r].split("|");if(parts.length<4)continue;
+   var index:Number=used++;
+   var tf:TextField=espField(index);
+   var px:Number=Number(parts[0])*12.8;var py:Number=Number(parts[1])*7.2;
+   tf._x=px-130;tf._y=py-20;
+   var text:String=parts.slice(3).join("|");
    if(tf.text!=text) {tf.text=text;tf.setTextFormat(espFormat);}
    tf._visible=true;
+   var hp:Number=Number(parts[2]);
+   var bar:MovieClip=espBar(index,hp<0?0:hp);
+   bar._x=px-31;bar._y=py+3;bar._visible=hp>=0;
   }
-  for(var i:Number=used;i<espFields.length;i++)espFields[i]._visible=false;
+  for(var i:Number=used;i<espFields.length;i++) {espFields[i]._visible=false;if(espBars[i]!=undefined)espBars[i]._visible=false;}
  }
  function draw():Void {
   build();if(panel!=undefined)panel.removeMovieClip();depth=1;panel=root.createEmptyMovieClip("panel",depth++);

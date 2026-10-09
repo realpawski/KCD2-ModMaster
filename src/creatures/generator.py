@@ -102,6 +102,8 @@ def registry_entry(mod_id: str, creature: CreatureDefinition, body: BaseBody) ->
              "soul_guid": creature.soul_guid, "archetype": body.archetype, "entity_class": body.entity_class,
              "health": int(creature.health), "stats": creature.stats(),
              "status": "packaged_unverified", "source": "compiled_custom"}
+    if creature.attitude in ("companion", "ally"):
+        entry["follow"] = True
     if creature.model_path:
         entry["model_path"] = creature.model_path
         if custom_look(creature, body):

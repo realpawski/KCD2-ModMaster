@@ -88,6 +88,15 @@ function ModMasterDev:EspTargets()
     return targets
 end
 
+-- Health is 0..100 in KCD2; -1 hides the bar for entities without a soul.
+function ModMasterDev:EspHealth(entity)
+    local soul=entity.soul
+    if type(soul)~="table" or not soul.GetState then return -1 end
+    local ok,value=pcall(soul.GetState,soul,"health")
+    if not ok or type(value)~="number" then return -1 end
+    return math.max(0,math.min(100,math.floor(value+0.5)))
+end
+
 function ModMasterDev:EspLabels(targets)
     local p=self:PlayerEntity()
     if not p then return "" end
@@ -102,7 +111,8 @@ function ModMasterDev:EspLabels(targets)
             if dist<=range then
                 local x,y=self:EspProject(cam,{x=pos.x,y=pos.y,z=pos.z+t.height})
                 if x and y and x>=0 and x<=100 and y>=0 and y<=100 then
-                    table.insert(rows,{d=dist,line=string.format("%.1f|%.1f|%s  %dm",x,y,t.name,math.floor(dist+0.5))})
+                    table.insert(rows,{d=dist,line=string.format("%.1f|%.1f|%d|%s  %dm",x,y,self:EspHealth(t.entity),
+                        t.name,math.floor(dist+0.5))})
                 end
             end
         end

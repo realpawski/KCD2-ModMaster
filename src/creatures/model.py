@@ -26,8 +26,8 @@ ANIMAL_ATTITUDES = (
     Attitude("domestic", "Domestic", "Belongs to the village like farm animals. People treat it as theirs and "
              "guards react when someone harms it.", "animal_home"),
     Attitude("hostile", "Hostile", "Attacks Henry on sight, like the wolves in the game.", "animal_wild_enemy"),
-    Attitude("companion", "Friend of Henry", "Treats Henry as a friend and stands with him against enemies.",
-             "animalCompanions"),
+    Attitude("companion", "Friend of Henry", "Treats Henry as a friend, walks back to him when it strays and "
+             "stands with him against enemies. Shy bodies like deer may still startle.", "animalCompanions"),
 )
 
 HUMAN_ATTITUDES = (
@@ -36,7 +36,7 @@ HUMAN_ATTITUDES = (
     Attitude("civilian", "Neutral civilian", "Minds their own business and only fights back when attacked.",
              "civilians"),
     Attitude("hostile", "Hostile", "Attacks Henry on sight, like bandits.", "eventNPCs_enemies"),
-    Attitude("ally", "Ally of Henry", "Fights on Henry's side.", "players_friends"),
+    Attitude("ally", "Ally of Henry", "Follows Henry and fights on his side.", "players_friends"),
 )
 
 # How each game body behaves on its own; shown so the choice of base animal is informed.
