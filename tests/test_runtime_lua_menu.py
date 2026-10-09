@@ -407,7 +407,7 @@ def test_registry_rejects_unsafe_creature_values():
  assert lua.eval('#ModMasterDev.assets')==1
 
 
-def test_friends_of_henry_are_walked_back_and_spawn_hidden_until_their_look_is_on():
+def test_friends_of_henry_are_walked_back_and_never_hidden():
  lua=runtime()
  lua.execute('''
   spawned={};hidden={};goto={}
@@ -421,10 +421,10 @@ def test_friends_of_henry_are_walked_back_and_spawn_hidden_until_their_look_is_o
    category="animals",soul_guid="0a1b2c3d-0000-0000-0000-00000000aaaa",model_path="Objects/modmaster/pal/pal.cdf",
    follow=true,source="compiled_custom"},{x=20,y=0,z=0})
  ''')
- assert lua.eval('hidden[1]')==1  # hidden right after the spawn
+ assert lua.eval('#hidden')==0  # hiding a creature while its look loads crashed the game
  assert lua.eval('#goto')==1 and abs(lua.eval('goto[1].x')-2.5)<1e-9  # walked to 2.5 m from Henry
  lua.execute('for i=#timers,1,-1 do local fn=timers[i];timers[i]=function() end;fn() end')
- assert lua.eval('hidden[#hidden]')==0  # shown again once the look is loaded
+ assert lua.eval('#hidden')==0
 
 
 def test_unloaded_classes_spawn_with_their_default_soul():

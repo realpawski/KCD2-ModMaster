@@ -166,7 +166,6 @@ function ModMasterDev:ApplyLook(entity,asset,model,attempt)
     if System.GetEntity and System.GetEntity(entity.id)~=entity then return end
     local ok,err=pcall(entity.LoadCharacter,entity,0,model)
     if attempt==1 then
-        if entity.Hide then pcall(entity.Hide,entity,0) end
         self:Log(asset.name .. " look " .. model .. ": " .. (ok and "loaded" or ("failed: " .. tostring(err))))
     end
     if ok and attempt<3 and Script and Script.SetTimer then
@@ -250,9 +249,8 @@ function ModMasterDev:SpawnSoul(asset,pos)
             tostring(entity.soul~=nil),clothing or model or "game"))
         self:ApplyCreature(entity,asset)
         if model and entity.LoadCharacter and Script and Script.SetTimer then
-            -- Hidden until the custom look is on, so the plain game body never shows.
-            if entity.Hide then pcall(entity.Hide,entity,1) end
-            Script.SetTimer(150,function() self:Guard(function() self:ApplyLook(entity,asset,model,1) end) end)
+            -- Loading the look earlier, or hiding the creature meanwhile, crashes the game; 500 ms is safe.
+            Script.SetTimer(500,function() self:Guard(function() self:ApplyLook(entity,asset,model,1) end) end)
         end
         if asset.follow then self:FollowTick(entity,asset,1) end
         return self:TrackSoul(entity,name,asset,pos,yaw)
