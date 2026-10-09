@@ -30,7 +30,13 @@ from ui.dialogs.asset_status_dialog import STATUS_TEXT, AssetStatusDialog
 from ui.dialogs.new_asset_wizard import NewAssetWizard
 from ui.widgets import EmptyState, PageHeader, button, configure_table, label, page_layout
 from utils.helpers import reveal_in_explorer
-from workspace.asset_model import AssetStatus, WorkspaceAsset, list_workspace_assets, validate_workspace_asset
+from workspace.asset_model import (
+    AssetStatus,
+    WorkspaceAsset,
+    delete_workspace_asset,
+    list_workspace_assets,
+    validate_workspace_asset,
+)
 
 log = logging.getLogger(__name__)
 
@@ -107,6 +113,9 @@ class WorkspaceAssetsPage(QWidget):
         for b in (self.btn_open_blender, self.btn_open_folder, self.btn_validate, self.btn_add_to_mod):
             actions.addWidget(b)
         actions.addStretch(1)
+        self.btn_delete = button("Delete", "trash", "Danger", tooltip="Move this asset to the workspace Trash")
+        self.btn_delete.clicked.connect(self._delete_selected)
+        actions.addWidget(self.btn_delete)
         lay.addLayout(actions)
         self._set_actions_enabled(False)
         self.ctx.mods_changed.connect(self.refresh)
@@ -232,7 +241,8 @@ class WorkspaceAssetsPage(QWidget):
         self._set_actions_enabled(self._get_selected_asset() is not None)
 
     def _set_actions_enabled(self, enabled: bool) -> None:
-        for b in (self.btn_open_blender, self.btn_open_folder, self.btn_validate, self.btn_add_to_mod):
+        for b in (self.btn_open_blender, self.btn_open_folder, self.btn_validate, self.btn_add_to_mod,
+                  self.btn_delete):
             b.setEnabled(enabled)
 
     def _get_selected_asset(self) -> WorkspaceAsset | None:
@@ -275,6 +285,49 @@ class WorkspaceAssetsPage(QWidget):
         if fresh:
             fresh.save()
             self._show_status(fresh)
+
+    def _usage(self, asset_id: str) -> tuple[list, list[str]]:
+        """Mods that package the asset, and the items and creatures that use it as their model."""
+        from creatures.store import CreatureStore
+        from items.store import ModItemStore
+
+        mods, users = [], []
+        for mod in ModManager(self.ctx.settings.workspace).list_mods():
+            if asset_id in mod.assets:
+                mods.append(mod)
+            for item in ModItemStore(mod, self.ctx.settings.workspace).items():
+                if item.workspace_asset_id == asset_id:
+                    users.append(f"item {item.display_name or item.name} in {mod.name}")
+            for creature in CreatureStore(mod).list():
+                if creature.workspace_asset_id == asset_id:
+                    users.append(f"creature {creature.name} in {mod.name}")
+        return mods, users
+
+    def _delete_selected(self) -> None:
+        asset = self._get_selected_asset()
+        if not asset:
+            return
+        mods, users = self._usage(asset.asset_id)
+        text = (f"Delete '{asset.name}'?\n\nThe asset folder moves to the Trash folder of your workspace, where "
+                "you can still restore it. Game files are never touched.")
+        if mods:
+            text += "\n\nIt is removed from: " + ", ".join(m.name for m in mods) + "."
+        if users:
+            text += ("\n\nStill used as a model by: " + "; ".join(users) + ". Pick another model for them, "
+                     "or their next build will fail.")
+        answer = QMessageBox.warning(self, "Delete asset", text, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            trash = delete_workspace_asset(self.ctx.settings.workspace, asset)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Delete asset", f"{exc}\n\nClose Blender if the asset is open there.")
+            return
+        for mod in mods:
+            mod.remove_asset(asset.asset_id)
+        self.ctx.mods_changed.emit()
+        self.refresh()
+        log.info("Moved workspace asset %s to %s", asset.asset_id, trash)
 
     def _add_to_mod_menu(self) -> None:
         asset = self._get_selected_asset()

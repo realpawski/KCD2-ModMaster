@@ -193,6 +193,22 @@ def test_uninstall_refuses_mods_not_built_by_modmaster(tmp_path):
         manager.uninstall_mod("kcd_modmaster_dev")
 
 
+def test_deleting_a_workspace_asset_moves_it_to_trash(tmp_path):
+    from workspace.asset_model import delete_workspace_asset
+
+    asset_dir = _rigged_asset(tmp_path, rigged_meta=True)
+    asset = list_workspace_assets(tmp_path)[0]
+    trash = delete_workspace_asset(tmp_path, asset)
+    assert not asset_dir.exists() and (trash / "metadata" / ".modmaster_asset.json").is_file()
+    assert trash.parent == tmp_path / "Trash" / "Assets"
+    assert list_workspace_assets(tmp_path) == []
+    outside = WorkspaceAsset("x", "Outside", workspace_dir=str(tmp_path / "Mods"))
+    (tmp_path / "Mods").mkdir()
+    with pytest.raises(ValueError):
+        delete_workspace_asset(tmp_path, outside)
+    assert (tmp_path / "Mods").is_dir()
+
+
 @pytest.mark.parametrize("value", [0, 10001])
 def test_health_range_is_enforced(value):
     c = CreatureDefinition("b", "B", "Boar", health=value)

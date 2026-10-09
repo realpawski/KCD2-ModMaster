@@ -121,6 +121,21 @@ class WorkspaceAsset:
         p.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def delete_workspace_asset(workspace_root: Path, asset: WorkspaceAsset) -> Path:
+    """Moves an asset folder from the workspace to its Trash, where it can be restored."""
+    import shutil
+
+    assets_root = (Path(workspace_root) / "Assets").resolve()
+    folder = Path(asset.workspace_dir).resolve()
+    if folder.parent != assets_root or not folder.is_dir():
+        raise ValueError(f"{asset.name} is not a workspace asset and cannot be deleted here.")
+    trash = Path(workspace_root) / "Trash" / "Assets"
+    trash.mkdir(parents=True, exist_ok=True)
+    target = trash / f"{folder.name}_{time.strftime('%Y%m%d-%H%M%S')}"
+    shutil.move(str(folder), str(target))
+    return target
+
+
 def _asset_type(data: dict, asset_dir: Path) -> str:
     from compiler import compiled_models
     if data.get("rigged") or compiled_models(asset_dir, kinds=(".cdf",)):
