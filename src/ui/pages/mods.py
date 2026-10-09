@@ -503,21 +503,35 @@ class ModWorkspace(QWidget):
                             if a.asset_type == AssetType.RIGGED.value and Path(a.workspace_dir).name not in exported)
         return bodies, models, unexported
 
-    def _open_creature(self, creature: CreatureDefinition) -> None:
+    def _open_creature(self, creature: CreatureDefinition, new: bool = False) -> None:
         data = self._creature_data()
         if not data:
             return
         bodies, models, unexported = data
+        if new and not creature.model_path:
+            self._preselect_look(creature, bodies, models)
         dlg = CreatureEditorDialog(creature, bodies, models, unexported, parent=self)
         if dlg.exec() == QDialog.Accepted and dlg.saved:
             self._creature_store().save(dlg.saved)
             self._fill_creatures()
 
+    def _preselect_look(self, creature: CreatureDefinition, bodies: dict, models: list) -> None:
+        """A new creature starts with the mod's own rigged model, so it does not spawn in the plain game look."""
+        from creatures.gamedata import same_skeleton
+
+        mine = [m for m in models if m.asset_id in self.mod.assets]
+        for model in mine:
+            fitting = sorted(b.entity_class for b in bodies.values() if same_skeleton(b.skeleton, model.skeleton))
+            if fitting:
+                creature.model_path, creature.workspace_asset_id = model.path, model.asset_id
+                creature.base_class = creature.base_class if creature.base_class in fitting else fitting[0]
+                return
+
     def _add_creature(self) -> None:
         if not self.mod:
             return
         store = self._creature_store()
-        self._open_creature(CreatureDefinition(store.unique_id("new_creature"), "New creature"))
+        self._open_creature(CreatureDefinition(store.unique_id("new_creature"), "New creature"), new=True)
 
     def _edit_creature(self) -> None:
         creature = self._selected_creature()
