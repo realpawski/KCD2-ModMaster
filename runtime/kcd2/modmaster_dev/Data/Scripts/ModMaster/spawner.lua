@@ -160,6 +160,19 @@ function ModMasterDev:ApplyCreature(entity,asset)
     if Script and Script.SetTimer then Script.SetTimer(300,function() self:Guard(apply) end) else self:Guard(apply) end
 end
 
+-- The clothing system dresses animals after they spawn; loading the model into the character slot on top
+-- keeps the game skeleton, so the creature's own animations still drive it.
+function ModMasterDev:ApplyLook(entity,asset,model,attempt)
+    if System.GetEntity and System.GetEntity(entity.id)~=entity then return end
+    local ok,err=pcall(entity.LoadCharacter,entity,0,model)
+    if attempt==1 then
+        self:Log(asset.name .. " look " .. model .. ": " .. (ok and "loaded" or ("failed: " .. tostring(err))))
+    end
+    if ok and attempt<3 and Script and Script.SetTimer then
+        Script.SetTimer(attempt*1500,function() self:Guard(function() self:ApplyLook(entity,asset,model,attempt+1) end) end)
+    end
+end
+
 function ModMasterDev:SpawnBody(class,name,pos,yaw,guid,model,clothing)
     local function spec(props)
         return {class=class,name=name,position=pos,orientation={x=-math.sin(yaw),y=math.cos(yaw),z=0},properties=props}
@@ -207,6 +220,9 @@ function ModMasterDev:SpawnSoul(asset,pos)
         self:Log(string.format("%s spawned via %s (class %s, has soul: %s, look: %s)",asset.name,how,class,
             tostring(entity.soul~=nil),clothing or model or "game"))
         self:ApplyCreature(entity,asset)
+        if model and entity.LoadCharacter and Script and Script.SetTimer then
+            Script.SetTimer(500,function() self:Guard(function() self:ApplyLook(entity,asset,model,1) end) end)
+        end
         return self:TrackSoul(entity,name,asset,pos,yaw)
     end
     self:Log("Spawn of " .. asset.name .. " failed (class " .. class .. ", soul " .. guid .. ")" .. (err and (": " .. tostring(err)) or ""))

@@ -365,7 +365,8 @@ def test_mod_creatures_get_their_model_stats_and_health():
   System.SpawnEntity=function(spec) table.insert(specs,spec)
    local soul=soulReady and {SetStatLevel=function(s,n,v) levels[n]=v end,SetState=function(s,n,v) health=v end,
     GetState=function(s,n) return health end} or nil
-   local e={id=#specs,soul=soul,GetName=function() return spec.name end};spawned[e.id]=e;return e end
+   local e={id=#specs,soul=soul,GetName=function() return spec.name end,
+    LoadCharacter=function(self,slot,model) loaded={slot=slot,model=model} end};spawned[e.id]=e;return e end
   System.RemoveEntity=function(id) table.insert(removed,id) end
   System.GetEntity=function(id) return spawned[id] end
   Boar={Properties={fileModel="boar.cdf"}}
@@ -375,9 +376,12 @@ def test_mod_creatures_get_their_model_stats_and_health():
    soul_guid="0a1b2c3d-0000-0000-0000-00000000c0de",model_path="Objects/modmaster/wizard/wizard.cdf",health=250,
    stats={strength=12},source="compiled_custom"}
   ModMasterDev:SpawnSoul(creature,{x=0,y=3,z=0})
-  timers[#timers]()
+  local apply,look=timers[#timers-1],timers[#timers]
+  look()
+  apply()
   health=60;timers[#timers]()
  ''')
+ assert lua.eval('loaded.slot==0 and loaded.model')=='Objects/modmaster/wizard/wizard.cdf'
  # 250 health: a hit of 40 only costs 16, so the creature lasts 2.5 times as long.
  assert abs(lua.eval('health')-84)<1e-9
  assert lua.eval('specs[1].properties.fileModel')=='Objects/modmaster/wizard/wizard.cdf'
