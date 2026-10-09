@@ -450,8 +450,45 @@ class RuntimeManager:
             raise ValueError("Creature check failed:\n" + "\n".join(errors))
         extra = {generator.soul_table_path(project.id):
                  generator.generate_soul_xml(project.id, creatures, bodies).encode("ascii")}
+        looks = []
+        for c in creatures:
+            body = bodies[c.base_class]
+            if not generator.custom_look(c, body):
+                continue
+            skin, material, files = self._creature_skin(c.model_path)
+            folder = f"modmaster/{generator.clothing_name(project.id, c)}/"
+            # Bodies are looked up under Objects/Characters/, so the skin is packed there as well.
+            for name, data in files.items():
+                extra[f"Objects/Characters/{folder}{name}"] = data
+            looks.append((c, body, folder, skin, material))
+        if looks:
+            extra[generator.clothing_table_path(project.id)] = generator.generate_clothing_xml(
+                project.id, [(c, b) for c, b, *_rest in looks]).encode("ascii")
+            extra[generator.component_table_path(project.id)] = generator.generate_component_xml(
+                project.id, looks).encode("ascii")
         entries = [generator.registry_entry(project.id, c, bodies[c.base_class]) for c in creatures]
         return creatures, entries, extra
+
+    def _creature_skin(self, model_path: str) -> tuple[str, str, dict[str, bytes]]:
+        """The skin and material a compiled .cdf binds, as (skin name, material name, files)."""
+        from compiler import compiled_files
+        from xml.etree import ElementTree as ET
+
+        assets = self.workspace / "Assets"
+        for asset_dir in sorted(assets.iterdir()) if assets.is_dir() else []:
+            files = compiled_files(asset_dir)
+            if model_path not in files:
+                continue
+            root = ET.parse(files[model_path]).getroot()
+            skin = next((a for a in root.iter("Attachment") if a.get("Type", "").upper() == "CA_SKIN"), None)
+            if skin is None or skin.get("Binding") not in files:
+                raise ValueError(f"{model_path} names no exported skin; export it again as Rigged.")
+            result = {Path(skin.get("Binding")).name: files[skin.get("Binding")].read_bytes()}
+            material = skin.get("Material", "")
+            if material in files:
+                result[Path(material).name] = files[material].read_bytes()
+            return Path(skin.get("Binding")).name, Path(material).name, result
+        raise ValueError(f"{model_path} is not exported. Export the asset as Rigged from Blender.")
 
     @staticmethod
     def _item_registry_entry(item) -> dict:

@@ -209,6 +209,25 @@ def test_deleting_a_workspace_asset_moves_it_to_trash(tmp_path):
     assert (tmp_path / "Mods").is_dir()
 
 
+def test_custom_look_dresses_the_body_through_its_own_clothing_config():
+    boar = BaseBody(**{**BOAR.__dict__, "clothing": {"Name": "boar", "Race": "Pig", "Gender": "NotDefined",
+                                                      "DefaultBody": "boar_body_boar", "Carcass": "carcass_body_boar"},
+                       "race": "Pig", "gender": "NotDefined", "equipment_part": "pig_torso"})
+    c = CreatureDefinition("rain", "Raincoat Boar", "Boar", model_path=MODEL)
+    assert generator.custom_look(c, boar)
+    clothing = generator.generate_clothing_xml("m", [(c, boar)])
+    assert 'Name="m_rain"' in clothing and 'DefaultBody="m_rain_body"' in clothing
+    assert 'Carcass="carcass_body_boar"' in clothing and "boar_body_boar" not in clothing
+    component = generator.generate_component_xml("m", [(c, boar, "modmaster/m_rain/", "rain.skin", "rain.mtl")])
+    assert 'FilePath="modmaster/m_rain/"' in component and 'EquipmentPart="pig_torso"' in component
+    assert 'Model="rain.skin"' in component and 'Race="Pig"' in component
+    import xml.etree.ElementTree as ET
+    ET.fromstring(clothing), ET.fromstring(component)
+    assert generator.registry_entry("m", c, boar)["clothing_config"] == "m_rain"
+    human = CreatureDefinition("guy", "Guy", "NPC", model_path=MODEL)
+    assert not generator.custom_look(human, boar)
+
+
 @pytest.mark.parametrize("value", [0, 10001])
 def test_health_range_is_enforced(value):
     c = CreatureDefinition("b", "B", "Boar", health=value)

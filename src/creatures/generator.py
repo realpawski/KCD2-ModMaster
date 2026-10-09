@@ -14,6 +14,56 @@ def soul_table_path(mod_id: str) -> str:
     return f"Libs/Tables/rpg/soul__{mod_id}.xml"
 
 
+def clothing_table_path(mod_id: str) -> str:
+    return f"Libs/Tables/Character/ClothingConfig__{mod_id}.xml"
+
+
+def component_table_path(mod_id: str) -> str:
+    return f"Libs/Tables/Character/CharacterComponent__{mod_id}.xml"
+
+
+def clothing_name(mod_id: str, creature: CreatureDefinition) -> str:
+    return f"{mod_id}_{creature.creature_id}"
+
+
+def custom_look(creature: CreatureDefinition, body: BaseBody) -> bool:
+    """Animals are dressed through one body skin, which a custom model can replace; people are assembled
+    from many clothing parts, so they keep the game look."""
+    return bool(creature.model_path) and not creature.is_human and bool(body.clothing and body.equipment_part)
+
+
+def _database(inner: list[str]) -> str:
+    return "\n".join(['<?xml version="1.0" encoding="us-ascii"?>',
+                      '<database xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="barbora" '
+                      'xsi:noNamespaceSchemaLocation="../database.xsd">', *inner, "</database>", ""])
+
+
+def generate_clothing_xml(mod_id: str, looks: list[tuple[CreatureDefinition, BaseBody]]) -> str:
+    rows = []
+    for creature, body in looks:
+        row = {k: v for k, v in body.clothing.items()
+               if k not in ("Name", "DefaultBody", "DefaultHair", "DefaultBeard", "DefaultHead")}
+        row["Name"] = clothing_name(mod_id, creature)
+        row["DefaultBody"] = clothing_name(mod_id, creature) + "_body"
+        rows.append("\t\t<ClothingConfig " + " ".join(f"{k}={quoteattr(v)}" for k, v in row.items()) + " />")
+    return _database(['\t<ClothingConfigs version="1">', *rows, "\t</ClothingConfigs>"])
+
+
+def generate_component_xml(mod_id: str, looks: list[tuple[CreatureDefinition, BaseBody, str, str, str]]) -> str:
+    """looks: (creature, body, folder under Objects/Characters/, skin file, material file)."""
+    rows = []
+    for creature, body, folder, skin, material in looks:
+        name = clothing_name(mod_id, creature)
+        rows += [f"\t\t<Component Name={quoteattr(name)} Race={quoteattr(body.race)} "
+                 f"Gender={quoteattr(body.gender or 'NotDefined')} FilePath={quoteattr(folder)}>",
+                 "\t\t\t<DerivedComponents>",
+                 f"\t\t\t\t<Body Name={quoteattr(name + '_body')}>",
+                 f"\t\t\t\t\t<Elements><SkinElement EquipmentPart={quoteattr(body.equipment_part)} BodyLayerId=\"0\" "
+                 f"Model={quoteattr(skin)} Material={quoteattr(material)} /></Elements>",
+                 "\t\t\t\t</Body>", "\t\t\t</DerivedComponents>", "\t\t</Component>"]
+    return _database(['\t<CharacterComponents version="6">', *rows, "\t</CharacterComponents>"])
+
+
 def soul_name(mod_id: str, creature: CreatureDefinition) -> str:
     return f"{mod_id}_{creature.creature_id}"
 
@@ -51,6 +101,8 @@ def registry_entry(mod_id: str, creature: CreatureDefinition, body: BaseBody) ->
              "status": "packaged_unverified", "source": "compiled_custom"}
     if creature.model_path:
         entry["model_path"] = creature.model_path
+        if custom_look(creature, body):
+            entry["clothing_config"] = clothing_name(mod_id, creature)
     return entry
 
 
@@ -78,6 +130,8 @@ def validate(creatures: list[CreatureDefinition], bodies: dict[str, BaseBody],
         for name, value in c.stats().items():
             if value > 30:
                 issues.append((WARNING, c.name, f"{name.title()} {value} is above the game's maximum of 30."))
+        if c.model_path and c.is_human:
+            issues.append((WARNING, c.name, "Custom models work for animals; people keep their game look."))
         if c.model_path:
             skeleton = models.get(c.model_path)
             if skeleton is None:

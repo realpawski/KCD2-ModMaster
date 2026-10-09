@@ -113,12 +113,14 @@ function ModMasterDev:CopyTable(source,depth)
 end
 
 -- Entity classes read their soul from Properties; the class defaults keep model, navigation and AI setup intact.
-function ModMasterDev:SoulProperties(class,guid,model)
+function ModMasterDev:SoulProperties(class,guid,model,clothing)
     local script=rawget(_G,class)
     if type(script)~="table" or type(script.Properties)~="table" then return nil end
     local props=self:CopyTable(script.Properties,0)
     props.guidSharedSoulId=guid;props.sharedSoulGuid=guid;props.bSaved_by_game=false
     if model then props.fileModel=model end
+    -- Animals are dressed by their clothing config; a mod creature brings its own with its skin.
+    if clothing then props.esClothingConfig=clothing end
     return props
 end
 
@@ -158,11 +160,11 @@ function ModMasterDev:ApplyCreature(entity,asset)
     if Script and Script.SetTimer then Script.SetTimer(300,function() self:Guard(apply) end) else self:Guard(apply) end
 end
 
-function ModMasterDev:SpawnBody(class,name,pos,yaw,guid,model)
+function ModMasterDev:SpawnBody(class,name,pos,yaw,guid,model,clothing)
     local function spec(props)
         return {class=class,name=name,position=pos,orientation={x=-math.sin(yaw),y=math.cos(yaw),z=0},properties=props}
     end
-    local props=self:SoulProperties(class,guid,model)
+    local props=self:SoulProperties(class,guid,model,clothing)
     if props then
         local ok,value=pcall(System.SpawnEntity,spec(props))
         if ok and type(value)=="table" and value.id then return value,"soul " .. guid end
@@ -179,19 +181,20 @@ function ModMasterDev:SpawnSoul(asset,pos)
     if not guid then return self:Log("No " .. tostring(asset.archetype) .. " souls in the registry") end
     local class=asset.entity_class or (asset.category=="npcs" and "NPC" or asset.archetype)
     local model=type(asset.model_path)=="string" and asset.model_path~="" and asset.model_path or nil
+    local clothing=type(asset.clothing_config)=="string" and asset.clothing_config:match("^[%w_]+$") and asset.clothing_config or nil
     self.serial=self.serial+1
     local name="ModMasterSoul_" .. self.serial
     local yaw=0
     local okDir,dir=pcall(System.GetViewCameraDir)
     if okDir and type(dir)=="table" then yaw=math.atan2(-dir.x,dir.y)+math.pi end
     local entity,how,err
-    if System.SpawnEntity then entity,how,err=self:SpawnBody(class,name,pos,yaw,guid,model) end
+    if System.SpawnEntity then entity,how,err=self:SpawnBody(class,name,pos,yaw,guid,model,clothing) end
     -- A mod's own soul only exists once the game loaded the mod's soul table; borrow a game soul otherwise.
     if entity and asset.source=="compiled_custom" and not entity.soul then
         local fallback=self:RandomSoul(asset.archetype)
         if fallback and fallback~=guid then
             pcall(System.RemoveEntity,entity.id)
-            entity,how,err=self:SpawnBody(class,name,pos,yaw,fallback,model)
+            entity,how,err=self:SpawnBody(class,name,pos,yaw,fallback,model,clothing)
             how=(how or "") .. " (mod soul not loaded)"
         end
     end
@@ -201,7 +204,8 @@ function ModMasterDev:SpawnSoul(asset,pos)
         if ok then entity=self:FindSpawned(ai,value,name);how="AI module" else err=value end
     end
     if entity then
-        self:Log(string.format("%s spawned via %s (class %s, has soul: %s)",asset.name,how,class,tostring(entity.soul~=nil)))
+        self:Log(string.format("%s spawned via %s (class %s, has soul: %s, look: %s)",asset.name,how,class,
+            tostring(entity.soul~=nil),clothing or model or "game"))
         self:ApplyCreature(entity,asset)
         return self:TrackSoul(entity,name,asset,pos,yaw)
     end

@@ -100,6 +100,9 @@ def test_real_cat_asset_blender_roundtrip():
     blender_exe = Path(r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe")
     if not blender_exe.is_file():
         pytest.skip("Blender 5.1 executable not found.")
+    from preview.converter import find_converter_exe
+    if find_converter_exe(s) is None:
+        pytest.skip("KCD2-Convertor.exe not found in this (isolated) environment.")
 
     idx = AssetIndex(s.database_path)
     rows = idx.find_by_vpath("Objects/characters/animals/cat/cat.cgf")
