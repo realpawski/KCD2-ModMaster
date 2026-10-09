@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.tasks import Task
-from creatures.model import CreatureDefinition, attitude
+from creatures.model import HUMAN_CLASSES, CreatureDefinition, attitude
 from creatures.store import CreatureStore
 from items.fields import field_info, headline_stats, type_label
 from items.gamedata import GameDataUnavailable
@@ -521,7 +521,9 @@ class ModWorkspace(QWidget):
 
         mine = [m for m in models if m.asset_id in self.mod.assets]
         for model in mine:
-            fitting = sorted(b.entity_class for b in bodies.values() if same_skeleton(b.skeleton, model.skeleton))
+            # People keep the game look, so only animal bodies can wear the model.
+            fitting = sorted(b.entity_class for b in bodies.values()
+                             if same_skeleton(b.skeleton, model.skeleton) and b.entity_class not in HUMAN_CLASSES)
             if fitting:
                 creature.model_path, creature.workspace_asset_id = model.path, model.asset_id
                 creature.base_class = creature.base_class if creature.base_class in fitting else fitting[0]

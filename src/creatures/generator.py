@@ -72,7 +72,7 @@ def soul_name(mod_id: str, creature: CreatureDefinition) -> str:
 
 
 def soul_row(mod_id: str, creature: CreatureDefinition, body: BaseBody) -> dict[str, str]:
-    # The template keeps brain, social and soul class of the base body; behaviour and identity are ours.
+    # The template keeps social and soul class of the base body, and its brain unless the attitude brings one.
     row = dict(body.template)
     row.update({
         "soul_id": creature.soul_guid,
@@ -80,6 +80,9 @@ def soul_row(mod_id: str, creature: CreatureDefinition, body: BaseBody) -> dict[
         "factionName": attitude(creature.base_class, creature.attitude).faction,
         "combat_level": f"{max(0.0, min(1.0, creature.combat_level)):g}",
     })
+    brain = attitude(creature.base_class, creature.attitude).brain
+    if brain:
+        row["brain_id"] = brain
     return row
 
 
@@ -106,10 +109,10 @@ def registry_entry(mod_id: str, creature: CreatureDefinition, body: BaseBody) ->
         entry["follow"] = True
     if creature.attitude in ("companion", "ally", "domestic", "neutral"):
         entry["calm"] = True
-    if creature.model_path:
+    # Loading a model onto a person replaces the body the game assembles from clothing parts and crashes it.
+    if custom_look(creature, body):
         entry["model_path"] = creature.model_path
-        if custom_look(creature, body):
-            entry["clothing_config"] = clothing_name(mod_id, creature)
+        entry["clothing_config"] = clothing_name(mod_id, creature)
     return entry
 
 

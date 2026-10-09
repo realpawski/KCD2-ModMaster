@@ -250,6 +250,8 @@ function ModMasterDev:SpawnSoul(asset,pos)
     if not guid then return self:Log("No " .. tostring(asset.archetype) .. " souls in the registry") end
     local class=asset.entity_class or (asset.category=="npcs" and "NPC" or asset.archetype)
     local model=type(asset.model_path)=="string" and asset.model_path~="" and asset.model_path or nil
+    -- People are assembled from clothing parts; loading a model over them crashes the game.
+    if asset.category=="npcs" then model=nil end
     local clothing=type(asset.clothing_config)=="string" and asset.clothing_config:match("^[%w_]+$") and asset.clothing_config or nil
     self.serial=self.serial+1
     local name="ModMasterSoul_" .. self.serial

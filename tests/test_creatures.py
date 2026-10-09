@@ -6,7 +6,7 @@ import pytest
 
 from creatures import generator
 from creatures.gamedata import BaseBody, bodies_for_skeleton, load_bodies
-from creatures.model import CreatureDefinition
+from creatures.model import DOG_COMPANION_BRAIN, CreatureDefinition
 from creatures.store import CreatureStore
 from mods.project import ModManager
 from runtime_tools.manager import RuntimeManager
@@ -73,9 +73,22 @@ def test_human_attitudes_use_human_factions():
 
 def test_registry_entry_carries_model_and_changed_stats_only():
     c = CreatureDefinition("b", "Wizard Boar", "Boar", model_path=MODEL, health=250, strength=12)
-    entry = generator.registry_entry("m", c, BOAR)
+    entry = generator.registry_entry("m", c, BOAR_DRESSED)
     assert entry["spawn_type"] == "soul" and entry["entity_class"] == "Boar" and entry["model_path"] == MODEL
     assert entry["health"] == 250 and entry["stats"] == {"strength": 12}
+
+
+def test_people_never_get_a_model_loaded_over_them():
+    c = CreatureDefinition("lady", "Lady", "NPC", model_path=MODEL, attitude="ally")
+    entry = generator.registry_entry("m", c, NPC)
+    assert "model_path" not in entry and "clothing_config" not in entry
+
+
+def test_friends_of_henry_think_like_his_dog():
+    friend = CreatureDefinition("b", "Friendly Boar", "Boar", attitude="companion")
+    assert generator.soul_row("m", friend, BOAR)["brain_id"] == DOG_COMPANION_BRAIN
+    ally = CreatureDefinition("g", "Guard", "NPC", attitude="ally")
+    assert generator.soul_row("m", ally, NPC)["brain_id"] == NPC.template["brain_id"]
 
 
 def test_validation_catches_missing_models_and_wrong_skeletons():
@@ -290,3 +303,13 @@ def test_mod_version_rises_only_when_its_content_changes(tmp_path, monkeypatch):
     assert ModManager(workspace).get_mod("beasts").version == "0.1.1"
     assert 'version="0.1.1"' in (built / "mod.manifest").read_text() or "0.1.1" in (built / "mod.manifest").read_text()
     assert json.loads((built / "modmaster_assets.json").read_text())["version"] == "0.1.1"
+
+
+def test_a_human_body_skin_finds_the_skeleton_beside_its_folder():
+    from runtime_tools.animations import resolve_skeleton
+
+    names = ["Objects/Characters/Humans/Female/Body/female_body_01.skin",
+             "Objects/Characters/Humans/Female/Skeleton/female.chr",
+             "Objects/Characters/Humans/Female/Skeleton/Preview/female_preview.chr"]
+    files = {n.lower(): (None, n) for n in names}
+    assert resolve_skeleton(None, names[0], files) == "Objects/Characters/Humans/Female/Skeleton/female.chr"

@@ -75,4 +75,16 @@ def resolve_skeleton(game: Path, model: str, files: dict | None = None) -> str:
             return model_node.get("File")
     chrs = sorted(name for name in files if name.startswith(folder) and name.endswith(".chr")
                   and "skeleton" in name.rsplit("/", 1)[-1])
-    return files[chrs[0]][1] if chrs else ""
+    if chrs:
+        return files[chrs[0]][1]
+    # People keep body parts in their own folders (humans/female/body/) and the skeleton beside them
+    # (humans/female/skeleton/female.chr).
+    parts = folder.rstrip("/").split("/")
+    while len(parts) > 2:
+        parts.pop()
+        shared = "/".join(parts) + "/skeleton/"
+        chrs = sorted(name for name in files if name.startswith(shared) and name.endswith(".chr")
+                      and "/" not in name[len(shared):])
+        if chrs:
+            return files[chrs[0]][1]
+    return ""
