@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -34,6 +35,21 @@ def main() -> int:
     if not (args.target / EXE).is_file():
         print(f"No installation found in {args.target}")
         return 1
+    # A second run would rebuild dist/ while the first one still copies from it.
+    lock = Path(tempfile.gettempdir()) / "kcd2_modmaster_install_dev_build.lock"
+    try:
+        handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        print(f"Another update is running; remove {lock} if it is stale.")
+        return 1
+    os.close(handle)
+    try:
+        return _update(args)
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _update(args) -> int:
     if not args.skip_build:
         subprocess.run([sys.executable, str(ROOT / "tools" / "build_release.py"), "--no-installer"], check=True)
     if not (DIST / EXE).is_file():
