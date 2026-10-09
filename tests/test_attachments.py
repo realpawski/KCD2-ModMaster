@@ -74,3 +74,21 @@ def test_grafting_twice_adds_nothing_and_foreign_files_are_refused():
         pass
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_points_placed_in_blender_move_and_add_helpers():
+    from compiler.attachments import NODE_TM, apply_points
+
+    data, _ = graft_attachments(custom_sword(), game_sword())
+    identity = [1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0]
+    moved = list(identity)
+    moved[3], moved[11] = 0.02, -0.4  # Blender row-major: translation in the last column, metres
+    data, changed = apply_points(data, {"slt_0": moved, "plc_01": identity})
+    assert changed == ["plc_01", "slt_0"]
+    chunks = {c[2]: c for c in _chunks(data)}
+    nodes = {_node(c)[0]: c for c in chunks.values() if c[0] == CHUNK_NODE}
+    tm = struct.unpack_from("<16f", nodes["slt_0"][3], NODE_TM)
+    assert abs(tm[12] - 2.0) < 1e-4 and abs(tm[14] + 40.0) < 1e-4  # centimetres in the translation row
+    added = _node(nodes["plc_01"])
+    assert added[2] == 10 and chunks[added[1]][0] == CHUNK_HELPER
+    assert _node(nodes["Merged"])[3] == 3  # slt_0, the proxy and the new plc_01

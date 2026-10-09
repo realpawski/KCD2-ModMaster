@@ -370,7 +370,7 @@ class RuntimeManager:
 
     def _item_attachments(self, stored, catalog) -> dict[str, bytes]:
         """Compiled item models with the grip, scabbard, pickup and physics points of their base item."""
-        from compiler.attachments import graft_attachments
+        from compiler.attachments import apply_points, graft_attachments
         from runtime_tools.animations import _game_files, _read
 
         result: dict[str, bytes] = {}
@@ -382,20 +382,27 @@ class RuntimeManager:
             compiled = asset_dir / "compiled" / "Objects" / item.model_path
             base = catalog.item(item.base_guid) if item.base_guid else None
             base_model = base.attrs.get("Model", "") if base else ""
-            if not compiled.is_file() or not base_model.lower().endswith(".cgf"):
+            if not compiled.is_file():
                 continue
-            files = files if files is not None else _game_files(self.game)
-            source = _read(files, "Objects/" + base_model)
-            if not source:
-                continue
-            try:
-                data, added = graft_attachments(compiled.read_bytes(), source)
-            except (ValueError, struct.error) as exc:
-                log.warning("Attachment points of %s not copied: %s", base_model, exc)
-                continue
-            if added:
+            data, added = compiled.read_bytes(), []
+            if base_model.lower().endswith(".cgf"):
+                files = files if files is not None else _game_files(self.game)
+                source = _read(files, "Objects/" + base_model)
+                try:
+                    data, added = graft_attachments(data, source) if source else (data, [])
+                except (ValueError, struct.error) as exc:
+                    log.warning("Attachment points of %s not copied: %s", base_model, exc)
+            # Points placed in Blender win over the base weapon's, so a custom grip can be fine-tuned.
+            placed = asset_dir / "metadata" / "attachments.json"
+            moved: list[str] = []
+            if placed.is_file():
+                try:
+                    data, moved = apply_points(data, json.loads(placed.read_text(encoding="utf-8")))
+                except (ValueError, struct.error, KeyError, TypeError) as exc:
+                    log.warning("Weapon points of %s not applied: %s", item.item_id, exc)
+            if added or moved:
                 result["Objects/" + item.model_path] = data
-                self._audit("item_attachments", item=item.item_id, base=base_model, nodes=added)
+                self._audit("item_attachments", item=item.item_id, base=base_model, nodes=added, placed=moved)
         return result
 
     def _stage_compiled_assets(self, project, items, creatures=()) -> tuple[list[dict], dict[str, bytes]]:

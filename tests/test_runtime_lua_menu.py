@@ -422,7 +422,7 @@ def test_friends_of_henry_are_walked_back_and_never_hidden():
    follow=true,source="compiled_custom"},{x=20,y=0,z=0})
  ''')
  assert lua.eval('#hidden')==0  # hiding a creature while its look loads crashed the game
- assert lua.eval('#goto')==1 and abs(lua.eval('goto[1].x')-3)<1e-9  # sent to 3 m from Henry
+ assert lua.eval('#goto')==0  # animal brains ignore AI.GoTo and stutter, so it is not sent
  lua.execute('for i=#timers,1,-1 do local fn=timers[i];timers[i]=function() end;fn() end')
  assert lua.eval('#hidden')==0
 

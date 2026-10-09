@@ -107,3 +107,50 @@ def graft_attachments(target: bytes, source: bytes) -> tuple[bytes, list[str]]:
     name, obj_id, parent, children, root_material = _node(root)
     struct.pack_into("<iiii", root[3], NODE_REFS, obj_id, parent, children + len(added), root_material)
     return _write(chunks), added
+
+
+NODE_TM = 84  # name, four ids, four bytes of flags, then the 4x4 transform with translation in centimetres
+
+
+def _node_body(name: str, obj: int, parent: int, tm: list[float]) -> bytearray:
+    body = bytearray(name.encode("latin-1")[:63].ljust(NODE_NAME, b"\0"))
+    body += struct.pack("<iiii", obj, parent, 0, 0) + bytes(4)
+    body += struct.pack("<16f", *tm) + bytes(40) + struct.pack("<iiii", -1, -1, -1, 0)
+    return body
+
+
+def _cry_tm(points: list[float]) -> list[float]:
+    """A row-major Blender matrix in metres -> CryEngine's transposed node matrix in centimetres."""
+    rows = [points[i * 4:i * 4 + 4] for i in range(4)]
+    tm = [rows[c][r] for r in range(4) for c in range(4)]
+    tm[12:15] = [v * 100.0 for v in tm[12:15]]
+    return tm
+
+
+def apply_points(data: bytes, points: dict[str, list[float]]) -> tuple[bytes, list[str]]:
+    """Moves helper nodes to the positions placed in Blender and adds the ones the model lacks."""
+    if not points:
+        return data, []
+    chunks = _chunks(data)
+    roots = [c for c in chunks if c[0] == CHUNK_NODE and _node(c)[2] == -1]
+    if not roots:
+        return data, []
+    root = roots[0]
+    by_name = {_node(c)[0].lower(): c for c in chunks if c[0] == CHUNK_NODE}
+    next_id = max(c[2] for c in chunks) + 1
+    changed, added = [], 0
+    for name, matrix in sorted(points.items()):
+        tm = _cry_tm(matrix)
+        node = by_name.get(name.lower())
+        if node is not None:
+            struct.pack_into("<16f", node[3], NODE_TM, *tm)
+        else:
+            chunks.append([CHUNK_HELPER, 0x744, next_id, bytearray(16)])
+            chunks.append([CHUNK_NODE, 0x824, next_id + 1, _node_body(name, next_id, root[2], tm)])
+            next_id += 2
+            added += 1
+        changed.append(name)
+    if added:
+        name, obj_id, parent, children, material = _node(root)
+        struct.pack_into("<iiii", root[3], NODE_REFS, obj_id, parent, children + added, material)
+    return _write(chunks), changed

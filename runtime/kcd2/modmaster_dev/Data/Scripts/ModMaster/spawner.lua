@@ -213,8 +213,6 @@ function ModMasterDev:FollowTick(entity,asset,tick)
                 self.followLogged=true
                 self:Log(asset.name .. " follows Henry: " .. (ok and "walking" or tostring(err)))
             end
-        elseif dist>5 and type(ai)=="table" and ai.GoTo then
-            pcall(ai.GoTo,entity.id,{x=a.x+dx/dist*3,y=a.y+dy/dist*3,z=a.z})
         end
         -- Last resort when it is truly lost: set it down behind Henry where nobody sees it appear.
         if dist>60 and self:OutOfView(b) then

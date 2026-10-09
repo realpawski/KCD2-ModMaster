@@ -353,6 +353,10 @@ class ItemEditorDialog(QDialog):
             grid.addWidget(label("Your model is held like the base item, so keep its grip where the base "
                                  "item's grip is.", "Muted", wrap=True), r, 1, 1, 3)
             r += 1
+        grid.addWidget(label("In game, price and damage scale with the item's quality (I to IV). Items given "
+                             "from the in-game menu arrive at a lower quality, so the game shows less than the "
+                             "values entered here.", "Muted", wrap=True), r, 1, 1, 3)
+        r += 1
 
         if new_item and self.project_dir is not None:
             icon_row = QHBoxLayout()

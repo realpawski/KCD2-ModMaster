@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -217,6 +218,25 @@ def _original_bones(meta: dict) -> dict:
     return bones
 
 
+HELPER_NAME = re.compile(r"^(slt_\d+|pck_ir_\d+|plc_\d+|sharpening_center)(\.\d+)?$", re.IGNORECASE)
+ATTACHMENTS_FILE = "attachments.json"
+
+
+def helper_points(context) -> dict:
+    """Weapon helper empties (grip, scabbard, pickup, placement) in game space, as row-major 4x4 matrices.
+
+    Builds copy these points from the base weapon; empties placed in Blender override them by name.
+    """
+    points = {}
+    for obj in context.view_layer.objects:
+        match = HELPER_NAME.match(obj.name)
+        if obj.type != "EMPTY" or not match:
+            continue
+        matrix = dae_export.TO_GAME @ obj.matrix_world
+        points[match.group(1).lower()] = [v for row in matrix for v in row]
+    return points
+
+
 class _BakedCopies:
     """Copies of the meshes with modifiers and world transform (in game orientation) baked into the vertices.
 
@@ -385,6 +405,13 @@ class KCD2_OT_export_cgf(bpy.types.Operator):
                 obj.select_set(True)
             context.view_layer.objects.active = previous_active
         produced, subs = result
+        attachments = asset_dir / "metadata" / ATTACHMENTS_FILE
+        points = helper_points(context) if self.export_type == "STATIC" else {}
+        if points:
+            attachments.write_text(json.dumps(points, indent=2), encoding="utf-8")
+            self.report({"INFO"}, f"Weapon points from the scene: {', '.join(sorted(points))}.")
+        elif attachments.is_file():
+            attachments.unlink()
 
         meta_file = asset_dir / "metadata" / ".modmaster_asset.json"
         try:
