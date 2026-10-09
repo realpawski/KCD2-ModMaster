@@ -106,6 +106,7 @@ end
 function ModMasterDev:ValidCreatureValues(asset)
     if asset.health ~= nil and (type(asset.health) ~= "number" or asset.health < 1 or asset.health > 10000) then return false end
     if asset.follow ~= nil and type(asset.follow) ~= "boolean" then return false end
+    if asset.calm ~= nil and type(asset.calm) ~= "boolean" then return false end
     if asset.stats == nil then return true end
     if type(asset.stats) ~= "table" then return false end
     for name, level in pairs(asset.stats) do

@@ -18,7 +18,7 @@ class ModMasterMenu {
   var self:ModMasterMenu=this;
   mc["fc_reset"]=function(tab:String,count:Number,sel:Number,all:Number) {self.active=tab;self.assets=[];self.total=all;self.draw();};
   mc["fc_row"]=function(index:Number,title:String,sub:String,sel:Boolean) {self.assets.push({title:title,action:"select:"+index,description:sub});self.draw();};
-  mc["fc_details"]=function(text:String,x:String,y:String,z:String,rx:String,ry:String,rz:String,scale:String) {self.detail=text;self.kind=text.indexOf("inventory_item")>=0?"inventory_item":"static_prop";self.values=[Number(x),Number(y),Number(z),Number(rx),Number(ry),Number(rz),Number(scale)];self.draw();};
+  mc["fc_details"]=function(text:String,x:String,y:String,z:String,rx:String,ry:String,rz:String,scale:String) {self.detail=text;self.kind=text.indexOf("GAME ITEM")>=0?"inventory_item":"static_prop";self.values=[Number(x),Number(y),Number(z),Number(rx),Number(ry),Number(rz),Number(scale)];self.draw();};
   mc["fc_status"]=function(text:String,summary:String) {self.message=text;self.draw();};
   mc["fc_freecam"]=function(enabled:Boolean) {self.noclipHud=false;self.cameraOnly=enabled;self.shown=!enabled;mc["mmVisible"]=!enabled;self.openedAt=getTimer();self.closeKeyPressed=false;self.draw();};
   mc["fc_noclip"]=function(enabled:Boolean) {self.noclipHud=true;self.cameraOnly=enabled;self.shown=!enabled;mc["mmVisible"]=!enabled;self.openedAt=getTimer();self.closeKeyPressed=false;self.draw();};

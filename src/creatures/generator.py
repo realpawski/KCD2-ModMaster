@@ -104,6 +104,8 @@ def registry_entry(mod_id: str, creature: CreatureDefinition, body: BaseBody) ->
              "status": "packaged_unverified", "source": "compiled_custom"}
     if creature.attitude in ("companion", "ally"):
         entry["follow"] = True
+    if creature.attitude in ("companion", "ally", "domestic", "neutral"):
+        entry["calm"] = True
     if creature.model_path:
         entry["model_path"] = creature.model_path
         if custom_look(creature, body):

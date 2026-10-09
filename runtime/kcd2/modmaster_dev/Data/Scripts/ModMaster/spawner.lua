@@ -113,7 +113,7 @@ function ModMasterDev:CopyTable(source,depth)
 end
 
 -- Entity classes read their soul from Properties; the class defaults keep model, navigation and AI setup intact.
-function ModMasterDev:SoulProperties(class,guid,model,clothing)
+function ModMasterDev:SoulProperties(class,guid,model,clothing,calm)
     local script=rawget(_G,class)
     if type(script)~="table" or type(script.Properties)~="table" then return nil end
     local props=self:CopyTable(script.Properties,0)
@@ -121,6 +121,8 @@ function ModMasterDev:SoulProperties(class,guid,model,clothing)
     if model then props.fileModel=model end
     -- Animals are dressed by their clothing config; a mod creature brings its own with its skin.
     if clothing then props.esClothingConfig=clothing end
+    -- Wild bodies startle from what they perceive and bolt; a tame or friendly creature must not.
+    if calm then props.bCanHoldInformation=false end
     return props
 end
 
@@ -201,11 +203,11 @@ function ModMasterDev:FollowTick(entity,asset,tick)
     end
 end
 
-function ModMasterDev:SpawnBody(class,name,pos,yaw,guid,model,clothing)
+function ModMasterDev:SpawnBody(class,name,pos,yaw,guid,model,clothing,calm)
     local function spec(props)
         return {class=class,name=name,position=pos,orientation={x=-math.sin(yaw),y=math.cos(yaw),z=0},properties=props}
     end
-    local props=self:SoulProperties(class,guid,model,clothing)
+    local props=self:SoulProperties(class,guid,model,clothing,calm)
     if props then
         local ok,value=pcall(System.SpawnEntity,spec(props))
         if ok and type(value)=="table" and value.id then return value,"soul " .. guid end
@@ -229,13 +231,14 @@ function ModMasterDev:SpawnSoul(asset,pos)
     local okDir,dir=pcall(System.GetViewCameraDir)
     if okDir and type(dir)=="table" then yaw=math.atan2(-dir.x,dir.y)+math.pi end
     local entity,how,err
-    if System.SpawnEntity then entity,how,err=self:SpawnBody(class,name,pos,yaw,guid,model,clothing) end
+    local calm=asset.calm==true
+    if System.SpawnEntity then entity,how,err=self:SpawnBody(class,name,pos,yaw,guid,model,clothing,calm) end
     -- A mod's own soul only exists once the game loaded the mod's soul table; borrow a game soul otherwise.
     if entity and asset.source=="compiled_custom" and not entity.soul then
         local fallback=self:RandomSoul(asset.archetype)
         if fallback and fallback~=guid then
             pcall(System.RemoveEntity,entity.id)
-            entity,how,err=self:SpawnBody(class,name,pos,yaw,fallback,model,clothing)
+            entity,how,err=self:SpawnBody(class,name,pos,yaw,fallback,model,clothing,calm)
             how=(how or "") .. " (mod soul not loaded)"
         end
     end

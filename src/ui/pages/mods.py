@@ -271,7 +271,8 @@ class ModWorkspace(QWidget):
             QMessageBox.warning(self, "Unknown item type",
                                 f"{stored_item.item_type} does not exist in this game version.")
             return
-        dlg = ItemEditorDialog(stored_item, catalog, self.mod.id, asset_dir, self, self.ctx.settings.workspace)
+        dlg = ItemEditorDialog(stored_item, catalog, self.mod.id, asset_dir, self, self.ctx.settings.workspace,
+                               self.mod.project_dir)
         if dlg.exec() == QDialog.Accepted and dlg.saved:
             self._store().save(dlg.saved)
             self._fill_items()

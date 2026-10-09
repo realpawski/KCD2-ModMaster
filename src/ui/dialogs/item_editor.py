@@ -5,12 +5,13 @@ import copy
 from pathlib import Path
 
 from PySide6.QtCore import QLocale, Qt, QTimer
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -30,6 +31,7 @@ from items.fields import GROUP_ORDER, IDENTITY_ATTRS, field_info, type_label
 from items.gamedata import AttrSpec, ItemCatalog
 from items.models import MODE_OVERRIDE, GameItemDefinition, format_number
 from items.validator import ERROR, validate_game_item
+from items.icons import ICON_HINT, ICON_SIZE, icon_id, store_icon
 from ui.dialogs.new_item_dialog import compiled_models, item_model
 from ui import theme
 from ui.icons import get_svg_icon
@@ -173,9 +175,10 @@ class AttrEditor:
 
 class ItemEditorDialog(QDialog):
     def __init__(self, item: GameItemDefinition, catalog: ItemCatalog, mod_id: str,
-                 asset_dir=None, parent=None, workspace=None):
+                 asset_dir=None, parent=None, workspace=None, project_dir=None):
         super().__init__(parent)
         self.workspace = workspace
+        self.project_dir = project_dir
         self.item = copy.deepcopy(item)
         self.catalog = catalog
         self.mod_id = mod_id
@@ -349,6 +352,29 @@ class ItemEditorDialog(QDialog):
                                  "item's grip is.", "Muted", wrap=True), r, 1, 1, 3)
             r += 1
 
+        if new_item and self.project_dir is not None:
+            icon_row = QHBoxLayout()
+            icon_row.setSpacing(10)
+            self.lbl_icon = QLabel()
+            self.lbl_icon.setFixedSize(ICON_SIZE * 2 + 4, ICON_SIZE * 2 + 4)
+            self.lbl_icon.setAlignment(Qt.AlignCenter)
+            self.lbl_icon.setStyleSheet(f"background: #0d0f14; border: 1px solid {theme.BORDER}; border-radius: 6px;")
+            icon_row.addWidget(self.lbl_icon)
+            icon_buttons = QVBoxLayout()
+            choose = button("Choose image…", "photo")
+            choose.clicked.connect(self._choose_icon)
+            self.btn_icon_reset = button("Use base item's icon", "arrow-path", "Ghost")
+            self.btn_icon_reset.clicked.connect(self._reset_icon)
+            icon_buttons.addWidget(choose)
+            icon_buttons.addWidget(self.btn_icon_reset)
+            icon_buttons.addWidget(label(ICON_HINT, "Muted", wrap=True))
+            icon_buttons.addStretch(1)
+            icon_row.addLayout(icon_buttons, 1)
+            grid.addWidget(label("Inventory icon"), r, 0, Qt.AlignTop)
+            grid.addLayout(icon_row, r, 1, 1, 3)
+            r += 1
+            self._show_icon()
+
         self.chk_inventory = QCheckBox("Add one to Henry's starting inventory (new games)")
         self.chk_inventory.setChecked(self.item.add_to_player_inventory)
         self.chk_inventory.setEnabled(new_item)
@@ -371,6 +397,44 @@ class ItemEditorDialog(QDialog):
         r += 1
         grid.setRowStretch(r, 1)
         self.tabs.addTab(area, "General")
+
+    def _show_icon(self) -> None:
+        path = Path(self.project_dir) / self.item.icon_image if self.item.icon_image else None
+        if path is not None and path.is_file():
+            pixmap = QPixmap(str(path)).scaled(ICON_SIZE * 2, ICON_SIZE * 2, Qt.KeepAspectRatio,
+                                               Qt.FastTransformation)
+            self.lbl_icon.setPixmap(pixmap)
+            self.btn_icon_reset.setEnabled(True)
+        else:
+            self.lbl_icon.setPixmap(QPixmap())
+            self.lbl_icon.setText("Game\nicon")
+            self.btn_icon_reset.setEnabled(False)
+
+    def _set_icon_id(self, value: str) -> None:
+        self.item.attributes["IconId"] = value
+        if "IconId" in self.editors:
+            self.editors["IconId"].set_value(value)
+            self.editors["IconId"].touched = True
+
+    def _choose_icon(self) -> None:
+        source, _ = QFileDialog.getOpenFileName(self, "Choose an inventory icon", "",
+                                                "Images (*.png *.jpg *.jpeg *.webp *.bmp *.tga)")
+        if not source:
+            return
+        try:
+            self.item.icon_image = store_icon(Path(source), Path(self.project_dir), self.item.item_id)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Inventory icon", f"The image could not be read:\n{exc}")
+            return
+        self._set_icon_id(icon_id(self.mod_id, self.item.item_id))
+        self._show_icon()
+        self._schedule_validation()
+
+    def _reset_icon(self) -> None:
+        self.item.icon_image = ""
+        self._set_icon_id(self.base.attrs.get("IconId", "") if self.base else "")
+        self._show_icon()
+        self._schedule_validation()
 
     def _model_changed(self) -> None:
         asset_id, model = self.cb_model.currentData()

@@ -71,6 +71,7 @@ class GameItemDefinition:
     write_text: bool = True
     workspace_asset_id: str = ""
     add_to_player_inventory: bool = False
+    icon_image: str = ""  # mod-relative PNG that becomes the inventory icon
     format_version: int = ITEM_FORMAT_VERSION
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)

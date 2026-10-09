@@ -427,6 +427,28 @@ def test_friends_of_henry_are_walked_back_and_never_hidden():
  assert lua.eval('#hidden')==0
 
 
+def test_friendly_creatures_do_not_startle():
+ lua=runtime()
+ lua.execute('''
+  specs={}
+  System.SpawnEntity=function(spec) table.insert(specs,spec);return {id=#specs,soul={},GetName=function() return spec.name end} end
+  System.GetEntity=function(id) end
+  Boar={Properties={fileModel="boar.cdf",bCanHoldInformation=true}}
+  local base={spawn_type="soul",archetype="Boar",entity_class="Boar",category="animals",soul_guid="0a1b2c3d-0000-0000-0000-00000000bbbb"}
+  ModMasterDev:SpawnSoul(setmetatable({id="a",name="Calm",calm=true},{__index=base}),{x=0,y=3,z=0})
+  ModMasterDev:SpawnSoul(setmetatable({id="b",name="Wild"},{__index=base}),{x=0,y=3,z=0})
+ ''')
+ assert lua.eval('specs[1].properties.bCanHoldInformation')is False
+ assert lua.eval('specs[2].properties.bCanHoldInformation')is True
+ assert lua.eval('Boar.Properties.bCanHoldInformation')is True  # class defaults untouched
+
+
+def test_menu_offers_give_for_items_it_labels_as_game_items():
+ menu=(SOURCE/'ModMaster/menu.lua').read_text(encoding='utf8')
+ swf=(SOURCE.parents[1]/'ui/ModMasterMenu.as').read_text(encoding='utf8')
+ assert '"GAME ITEM (Equippable)"' in menu and 'indexOf("GAME ITEM")' in swf
+
+
 def test_unloaded_classes_spawn_with_their_default_soul():
  lua=runtime()
  lua.execute('''

@@ -284,6 +284,30 @@ def test_build_packs_items_localization_and_preset(game, tmp_path, catalog):
     assert len(ids) == len(set(ids))
 
 
+def test_custom_icon_is_fitted_and_packed_where_the_game_looks_for_it(game, tmp_path, catalog):
+    from PIL import Image
+
+    from items.icons import ICON_SIZE, icon_id, store_icon
+
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    project = ModManager(workspace).create_mod("Icon Mod", "icon_mod")
+    store = ModItemStore(project, workspace)
+    item = new_item_from_base(catalog.by_name("longswordBroad"), "shiny_sword", "Shiny Sword")
+    picture = tmp_path / "picture.png"
+    Image.new("RGBA", (300, 120), (40, 200, 120, 255)).save(picture)
+    item.icon_image = store_icon(picture, Path(project.project_dir), item.item_id)
+    item.attributes["IconId"] = icon_id(project.id, item.item_id)
+    store.save(item)
+    with Image.open(Path(project.project_dir) / item.icon_image) as fitted:
+        assert fitted.size == (ICON_SIZE, ICON_SIZE) and fitted.getpixel((0, 0))[3] == 0
+    built = RuntimeManager(game, workspace).build_project(project)
+    with zipfile.ZipFile(built / "Data/icon_mod.pak") as z:
+        dds = z.read("Libs/UI/Textures/Icons/Items/icon_mod_shiny_sword_icon.dds")
+        assert 'IconId="icon_mod_shiny_sword"' in z.read("Libs/Tables/item/item__icon_mod.xml").decode()
+    assert dds[:4] == b"DDS " and len(dds) == 128 + ICON_SIZE * ICON_SIZE * 4
+
+
 def test_item_and_prop_of_one_asset_keep_separate_menu_entries(tmp_path, catalog):
     from runtime_tools.manager import RuntimeManager
 

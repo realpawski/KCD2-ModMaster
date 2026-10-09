@@ -356,6 +356,11 @@ class RuntimeManager:
 
         items = [s.item for s in stored]
         extra = {item_table_path(project.id): generate_item_xml(items, project.id).encode("ascii")}
+        from items.icons import icon_dds, icon_game_path
+        for item in items:
+            icon = root / item.icon_image if item.icon_image else None
+            if icon is not None and icon.is_file() and item.attributes.get("IconId"):
+                extra[icon_game_path(item.attributes["IconId"])] = icon_dds(icon)
         preset = generate_inventory_preset_xml(items)
         if preset:
             extra[inventory_preset_path(project.id)] = preset.encode("ascii")
