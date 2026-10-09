@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
 
 from PySide6.QtCore import QObject, Signal
@@ -36,4 +37,10 @@ def setup_logging() -> QtLogHandler:
     root.addHandler(fh)
     qh = QtLogHandler()
     root.addHandler(qh)
+    # Errors raised in button handlers otherwise vanish without a trace in the frozen app.
+    sys.excepthook = _log_uncaught
     return qh
+
+
+def _log_uncaught(exc_type, exc, tb) -> None:
+    logging.getLogger("modmaster").error("Unexpected error: %s", exc, exc_info=(exc_type, exc, tb))

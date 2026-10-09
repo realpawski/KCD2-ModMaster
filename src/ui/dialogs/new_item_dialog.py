@@ -133,8 +133,8 @@ class NewItemDialog(QDialog):
         form.addRow("Display name", self.txt_name)
         self.cb_model = QComboBox()
         self.cb_model.addItem("Use the base item's model", None)
-        for asset_id, label, model in compiled_models(workspace):
-            self.cb_model.addItem(f"Workspace model: {label}", (asset_id, model))
+        for asset_id, title, model in compiled_models(workspace):
+            self.cb_model.addItem(f"Workspace model: {title}", (asset_id, model))
         form.addRow("Model", self.cb_model)
         root.addLayout(form)
 

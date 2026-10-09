@@ -228,6 +228,22 @@ def test_store_lists_project_and_legacy_asset_items(tmp_path, catalog):
     assert [s.item.item_id for s in store.list()] == ["old_sword"]
 
 
+def test_add_item_dialog_opens_and_offers_compiled_models(tmp_path, catalog, qapp):
+    from ui.dialogs.new_item_dialog import NewItemDialog
+
+    workspace = tmp_path / "ws"
+    target = workspace / "Assets" / "diamond_sword" / "compiled" / "Objects" / "modmaster" / "diamond_sword"
+    target.mkdir(parents=True)
+    (target / "diamond_sword.cgf").write_bytes(b"CrCh" + b"\0" * 16)
+    meta = workspace / "Assets" / "diamond_sword" / "metadata" / ".modmaster_asset.json"
+    meta.parent.mkdir(parents=True)
+    meta.write_text(json.dumps({"asset_id": "diamond_sword", "asset_name": "diamond_sword"}))
+    project = ModManager(workspace).create_mod("Swords", "swords")
+    dlg = NewItemDialog(catalog, ModItemStore(project, workspace), workspace)
+    offered = [dlg.cb_model.itemText(i) for i in range(dlg.cb_model.count())]
+    assert any("diamond_sword" in text for text in offered)
+
+
 def test_build_packs_items_localization_and_preset(game, tmp_path, catalog):
     workspace = tmp_path / "ws"
     workspace.mkdir()
