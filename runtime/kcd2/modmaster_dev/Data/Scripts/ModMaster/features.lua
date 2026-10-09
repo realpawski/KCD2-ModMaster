@@ -28,6 +28,7 @@ function ModMasterDev:ToggleEsp()
     self.esp=not self.esp
     self.espRange=self.espRange or ModMasterEspDefaultRange
     self.espGeneration=(self.espGeneration or 0)+1
+    self.espTargets=nil;self.espText=nil;self.espFrame=0
     if self.esp then
         self:EspTick(self.espGeneration)
     else
@@ -40,7 +41,7 @@ end
 function ModMasterDev:SetEspRange(value)
     local range=tonumber(value)
     if not range or range<5 or range>2000 then return self:Log("ESP range must be between 5 and 2000 m") end
-    self.espRange=math.floor(range+0.5)
+    self.espRange=math.floor(range+0.5);self.espTargets=nil
     self:Log("ESP range " .. self.espRange .. " m")
 end
 
@@ -75,21 +76,33 @@ function ModMasterDev:EspProject(cam,point)
     if ok and type(s)=="table" and tonumber(s.x) and tonumber(s.y) and (s.x~=0 or s.y~=0) then return s.x,s.y end
 end
 
-function ModMasterDev:EspLabels()
+function ModMasterDev:EspTargets()
     local p=self:PlayerEntity()
-    if not p or not System.GetEntitiesInSphere then return "" end
+    if not p or not System.GetEntitiesInSphere then return {} end
+    local targets={}
+    for _,e in pairs(System.GetEntitiesInSphere(p:GetWorldPos(),self.espRange or ModMasterEspDefaultRange) or {}) do
+        if type(e)=="table" and e.id~=p.id and (e.soul or e.actor or e.horse) and e.GetWorldPos then
+            table.insert(targets,{entity=e,name=self:EspName(e),height=e.horse and 2.3 or 2.0})
+        end
+    end
+    return targets
+end
+
+function ModMasterDev:EspLabels(targets)
+    local p=self:PlayerEntity()
+    if not p then return "" end
     local origin=p:GetWorldPos();local range=self.espRange or ModMasterEspDefaultRange
     local cam=self:EspCamera()
     local rows={}
-    for _,e in pairs(System.GetEntitiesInSphere(origin,range) or {}) do
-        if type(e)=="table" and e.id~=p.id and (e.soul or e.actor or e.horse) and e.GetWorldPos then
-            local pos=e:GetWorldPos()
+    for _,t in ipairs(targets) do
+        local okPos,pos=pcall(t.entity.GetWorldPos,t.entity)
+        if okPos and type(pos)=="table" then
             local dx,dy,dz=pos.x-origin.x,pos.y-origin.y,pos.z-origin.z
             local dist=math.sqrt(dx*dx+dy*dy+dz*dz)
             if dist<=range then
-                local x,y=self:EspProject(cam,{x=pos.x,y=pos.y,z=pos.z+(e.horse and 2.3 or 2.0)})
+                local x,y=self:EspProject(cam,{x=pos.x,y=pos.y,z=pos.z+t.height})
                 if x and y and x>=0 and x<=100 and y>=0 and y<=100 then
-                    table.insert(rows,{d=dist,line=string.format("%.2f|%.2f|%s  %dm",x,y,self:EspName(e),math.floor(dist+0.5))})
+                    table.insert(rows,{d=dist,line=string.format("%.1f|%.1f|%s  %dm",x,y,t.name,math.floor(dist+0.5))})
                 end
             end
         end
@@ -100,17 +113,25 @@ function ModMasterDev:EspLabels()
     return table.concat(lines,"\n")
 end
 
+-- Labels follow the camera every frame; the costly sphere query only runs a few times per second.
 function ModMasterDev:EspTick(generation)
     if not self.esp or generation~=self.espGeneration then return end
     if not self.opened and not self.noclip then self:Overlay(true) end
-    -- Labels would cover the menu, so they pause while it is open.
-    local ok,text=pcall(function() return self.opened and "" or self:EspLabels() end)
+    local ok,text=pcall(function()
+        if self.opened then return "" end
+        self.espFrame=(self.espFrame or 0)+1
+        if not self.espTargets or self.espFrame%20==1 then self.espTargets=self:EspTargets() end
+        return self:EspLabels(self.espTargets)
+    end)
     if not ok then
         self.esp=false;self:Overlay(false)
         return self:Log("ESP stopped: " .. tostring(text))
     end
-    self:Guard(function() self:UI("Esp",text) end)
-    if Script and Script.SetTimer then Script.SetTimer(100,function() self:EspTick(generation) end) end
+    if text~=self.espText then
+        self.espText=text
+        self:Guard(function() self:UI("Esp",text) end)
+    end
+    if Script and Script.SetTimer then Script.SetTimer(16,function() self:EspTick(generation) end) end
 end
 
 ModMasterPhotoRangeCVar="wh_photomode_MaxDistance"

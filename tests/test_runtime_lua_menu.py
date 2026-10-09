@@ -338,14 +338,17 @@ def test_souls_spawn_through_the_ai_module_and_are_tracked():
   aiCalls={};entities={}
   local function make(id,name) local e={id=id,GetName=function() return name end,GetWorldPos=function() return {x=0,y=3,z=0} end,
    GetWorldAngles=function() return {x=0,y=0,z=0} end,GetScale=function() return 1 end};entities[id]=e;return e end
-  XGenAIModule={SpawnEntity=function(p) table.insert(aiCalls,p);return "wuid"..#aiCalls end,
-   GetEntityByWUID=function(w) return make(100+#aiCalls,aiCalls[#aiCalls].Name) end}
+  XGenAIModule={SpawnEntity=function(p) table.insert(aiCalls,p);local id=100+#aiCalls;make(id,p.Name);return id end}
   System.GetEntity=function(id) return entities[id] end;System.RemoveEntity=function(id) entities[id]=nil end
-  ModMasterDev:SpawnSoul({id="soul:x",name="Hans",soul_guid="0a1b2c3d-0000-0000-0000-000000000001",archetype="NPC",category="npcs"},{x=0,y=3,z=0})
-  ModMasterDev:SpawnSoul({id="soul:Boar",name="Random Boar",archetype="Boar",category="animals"},{x=0,y=3,z=0})
+  ModMasterDev.assets={{id="soul:b1",spawn_type="soul",archetype="Boar",soul_guid="0a1b2c3d-0000-0000-0000-0000000000b1"}}
+  ModMasterDev:SpawnSoul({id="soul:x",name="Hans",soul_guid="0a1b2c3d-0000-0000-0000-000000000001",archetype="NPC",entity_class="NPC",category="npcs"},{x=0,y=3,z=0})
+  ModMasterDev:SpawnSoul({id="soul:Boar",name="Random Boar",archetype="Boar",entity_class="Boar",category="animals"},{x=0,y=3,z=0})
+  ModMasterDev:SpawnSoul({id="soul:Wolf",name="Random Wolf",archetype="Wolf",entity_class="Wolf",category="animals"},{x=0,y=3,z=0})
  ''')
  assert lua.eval('aiCalls[1].SharedSoulGuid')=='0a1b2c3d-0000-0000-0000-000000000001'
- assert lua.eval('aiCalls[1].SoulArchetypeName==nil and aiCalls[2].SoulArchetypeName=="Boar" and aiCalls[2].SharedSoulGuid==nil')
+ assert lua.eval('aiCalls[1].ClassName=="NPC" and aiCalls[2].ClassName=="Boar"')
+ assert lua.eval('aiCalls[2].SharedSoulGuid')=='0a1b2c3d-0000-0000-0000-0000000000b1'
+ assert lua.eval('#aiCalls')==2  # no Wolf soul known, nothing requested
  assert lua.eval('#ModMasterDev:ActiveSpawns()')==2
  lua.execute('ModMasterDev:Clear()')
  assert lua.eval('#ModMasterDev.spawns')==0
@@ -359,7 +362,7 @@ def test_late_soul_entities_are_picked_up_and_horses_fall_back_to_the_class():
   System.GetEntityByName=function(n) return byName[n] end
   System.GetEntity=function(id) for _,e in pairs(byName) do if e.id==id then return e end end end
   horses={};System.SpawnEntity=function(spec) table.insert(horses,spec);return nil end
-  ModMasterDev:SpawnSoul({id="soul:Horse",name="Random Horse",archetype="Horse",category="animals"},{x=0,y=3,z=0})
+  ModMasterDev:SpawnSoul({id="soul:h",name="Horse2",soul_guid="0a1b2c3d-0000-0000-0000-0000000000a1",archetype="Horse",entity_class="Horse",category="animals"},{x=0,y=3,z=0})
   byName.ModMasterSoul_1={id=7,GetName=function() return "ModMasterSoul_1" end}
   timers[#timers]()
  ''')
@@ -392,7 +395,10 @@ def test_esp_labels_nearby_creatures_with_distance_and_keeps_an_overlay():
  assert lua.eval('ModMasterDev.esp==true and visible and sphere==100')
  labels=[c for c in lua.eval('calls').values() if c[3]=='Esp']
  text=labels[-1][4]
- assert text.startswith('50.00|') and 'Hans  10m' in text and 'Behind' not in text and 'rock' not in text
+ assert text.startswith('50.0|') and 'Hans  10m' in text and 'Behind' not in text and 'rock' not in text
+ lua.execute('sphere=nil;System.GetViewCameraDir=function() return {x=0.1,y=1,z=0} end;timers[#timers]()')
+ labels=[c for c in lua.eval('calls').values() if c[3]=='Esp']
+ assert lua.eval('sphere')is None and not labels[-1][4].startswith('50.0|')  # moved with the camera, no new query
  open_menu(lua)
  event(lua,'esp_range:250');assert lua.eval('ModMasterDev.espRange')==250
  event(lua,'esp_range:abc');event(lua,'esp_range:99999');assert lua.eval('ModMasterDev.espRange')==250

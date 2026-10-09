@@ -1,4 +1,4 @@
-ModMasterDev = {version="0.5.6", registryVersion=1, opened=false, assets={},
+ModMasterDev = {version="0.5.7", registryVersion=1, opened=false, assets={},
     spawns={}, selected=1, spawnSelected=1, tab="ASSETS", search="", category="", modFilter="",
     serial=0, timer=nil, message="Runtime loaded; in-game acceptance pending", locations={},
     settings={hotkey="f5",keyCode=116,noclipHotkey="f4",hudEnabled=true,freecamSpeed=5.0,fastMult=4.0,slowMult=0.25}}
@@ -58,6 +58,9 @@ function ModMasterDev:LoadRegistry()
                 asset.soul_guid:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$")) or
                 (type(asset.archetype) == "string" and asset.archetype:match("^[%w_]+$"))) then
                 reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): soul needs a GUID or archetype")
+            elseif asset.spawn_type == "soul" and asset.entity_class ~= nil and
+                not (type(asset.entity_class) == "string" and asset.entity_class:match("^[%w_]+$")) then
+                reject("Registry entry skipped (" .. mod.id .. ":" .. asset.id .. "): invalid entity_class")
             elseif asset.spawn_type ~= "static_prop" and asset.spawn_type ~= "inventory_item" and asset.spawn_type ~= "soul" then
                 reject("Registry entry skipped (" .. mod.id .. ":" .. tostring(asset.id) .. "): unsupported spawn_type")
             elseif asset.spawn_type == "static_prop" and (type(asset.model_path) ~= "string" or

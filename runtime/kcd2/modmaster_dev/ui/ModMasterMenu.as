@@ -5,7 +5,7 @@ class ModMasterMenu {
  var view:Number;var active:String;var entries:Array;var assets:Array;var focus:Number;var total:Number;
  var candidateKey:String;var candidateNoclipKey:String;var modalOpen:Boolean;var modal:MovieClip;var searchField:TextField;var queries:Object;var queryKey:String;
  var shiftHeld:Boolean;var ctrlHeld:Boolean;
- var espLayer:MovieClip;var overlayOnly:Boolean;var espOn:Boolean;var espRange:String;var inputMode:String;
+ var espLayer:MovieClip;var espFields:Array;var espFormat:TextFormat;var overlayOnly:Boolean;var espOn:Boolean;var espRange:String;var inputMode:String;
  var cameraOnly:Boolean;var noclipHud:Boolean;var hotkey:String;var keyCode:Number;var hudEnabled:Boolean;var kind:String;
  var detail:String;var message:String;var god:String;var noclipStatus:String;var freecamStatus:String;var values:Array;var settingValues:Array;
  static function main(mc:MovieClip):Void {app=new ModMasterMenu(mc);}
@@ -132,18 +132,32 @@ class ModMasterMenu {
   entries.unshift({title:"Search: "+(query.length>0?query:"[Enter]"),action:"open_search",description:"Enter: edit search. Ctrl+A selects all; Delete clears; Ctrl+C / Ctrl+V copy and paste."});
   focus=Math.max(0,Math.min(entries.length-1,focus));
  }
+ function espField(index:Number):TextField {
+  if(espFields[index]!=undefined)return espFields[index];
+  espLayer.createTextField("esp"+index,index+1,0,0,260,22);var tf:TextField=espLayer["esp"+index];
+  tf.embedFonts=true;tf.selectable=false;
+  // Black outline keeps the labels readable on bright sky and snow.
+  var Glow=_global["flash"]["filters"]["GlowFilter"];
+  if(Glow!=undefined)tf.filters=[new Glow(0x000000,1,3,3,6,1)];
+  else {_global.gfxExtensions=true;tf["shadowStyle"]="s{1,0}{-1,0}{0,1}{0,-1}";tf["shadowColor"]=0x000000;}
+  espFields[index]=tf;return tf;
+ }
  function drawEsp(data:String):Void {
-  if(espLayer!=undefined)espLayer.removeMovieClip();
-  espLayer=root.createEmptyMovieClip("espLayer",90000);
-  if(data==undefined || data=="")return;
-  var rows:Array=data.split("\n");
-  var fmt:TextFormat=new TextFormat();fmt.font="ModMaster Sans";fmt.size=12;fmt.color=0xF2D58A;fmt.align="center";
+  if(espLayer==undefined) {
+   espLayer=root.createEmptyMovieClip("espLayer",90000);espFields=[];
+   espFormat=new TextFormat();espFormat.font="ModMaster Sans";espFormat.size=13;espFormat.color=0xF2D58A;espFormat.align="center";
+  }
+  var rows:Array=(data==undefined || data=="")?[]:data.split("\n");
+  var used:Number=0;
   for(var r:Number=0;r<rows.length;r++) {
    var parts:Array=rows[r].split("|");if(parts.length<3)continue;
-   var x:Number=Number(parts[0])*12.8;var y:Number=Number(parts[1])*7.2;
-   espLayer.createTextField("esp"+r,r+1,x-120,y-18,240,20);var tf:TextField=espLayer["esp"+r];
-   tf.embedFonts=true;tf.selectable=false;tf.text=parts.slice(2).join("|");tf.setTextFormat(fmt);
+   var tf:TextField=espField(used++);
+   tf._x=Number(parts[0])*12.8-130;tf._y=Number(parts[1])*7.2-20;
+   var text:String=parts.slice(2).join("|");
+   if(tf.text!=text) {tf.text=text;tf.setTextFormat(espFormat);}
+   tf._visible=true;
   }
+  for(var i:Number=used;i<espFields.length;i++)espFields[i]._visible=false;
  }
  function draw():Void {
   build();if(panel!=undefined)panel.removeMovieClip();depth=1;panel=root.createEmptyMovieClip("panel",depth++);
@@ -158,7 +172,7 @@ class ModMasterMenu {
   var start:Number=Math.floor(focus/9)*9;var count:Number=Math.min(9,entries.length-start);
   box(34,48,292,62,0xE4D6B8,100);
   label("KCD2 MODMASTER",46,59,266,28,21,0x241C12);
-  label("RUNTIME 0.5.6",48,87,266,16,10,0x6B5A3A);
+  label("RUNTIME 0.5.7",48,87,266,16,10,0x6B5A3A);
   box(34,110,292,3,0xBD9A5F,100);
   box(34,113,292,25,0x100D0A,94);
   var crumb:String=breadcrumb();

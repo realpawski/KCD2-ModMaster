@@ -65,6 +65,10 @@ end
 -- NPCs and animals come to life through the AI module: a soul gives them brain, schedule and animations.
 function ModMasterDev:FindSpawned(ai,result,name)
     if type(result)=="table" and result.id then return result end
+    if result~=nil and System.GetEntity then
+        local ok,entity=pcall(System.GetEntity,result)
+        if ok and type(entity)=="table" and entity.id then return entity end
+    end
     if result~=nil and ai and ai.GetEntityByWUID then
         local ok,entity=pcall(ai.GetEntityByWUID,result)
         if ok and type(entity)=="table" and entity.id then return entity end
@@ -83,8 +87,25 @@ function ModMasterDev:TrackSoul(entity,name,asset,pos,yaw)
     return entity
 end
 
+-- The engine only spawns a concrete soul, so "Random" entries draw one of that archetype.
+function ModMasterDev:RandomSoul(archetype)
+    self.soulPools=self.soulPools or {}
+    local pool=self.soulPools[archetype]
+    if not pool then
+        pool={}
+        for _,a in ipairs(self.assets) do
+            if a.spawn_type=="soul" and a.soul_guid and a.archetype==archetype then table.insert(pool,a.soul_guid) end
+        end
+        self.soulPools[archetype]=pool
+    end
+    if #pool>0 then return pool[math.random(#pool)] end
+end
+
 function ModMasterDev:SpawnSoul(asset,pos)
     local ai=rawget(_G,"XGenAIModule")
+    local guid=asset.soul_guid or self:RandomSoul(asset.archetype)
+    if not guid then return self:Log("No " .. tostring(asset.archetype) .. " souls in the registry") end
+    local class=asset.entity_class or (asset.category=="npcs" and "NPC" or asset.archetype)
     self.serial=self.serial+1
     local name="ModMasterSoul_" .. self.serial
     local yaw=0
@@ -92,13 +113,11 @@ function ModMasterDev:SpawnSoul(asset,pos)
     if okDir and type(dir)=="table" then yaw=math.atan2(-dir.x,dir.y)+math.pi end
     local result,err
     if type(ai)=="table" and type(ai.SpawnEntity)=="function" then
-        local params={Name=name,Pos=pos,Rot={x=0,y=0,z=yaw}}
-        if asset.soul_guid then params.SharedSoulGuid=asset.soul_guid else params.SoulArchetypeName=asset.archetype end
-        local ok,value=pcall(ai.SpawnEntity,params)
+        local ok,value=pcall(ai.SpawnEntity,{Name=name,ClassName=class,SharedSoulGuid=guid,Pos=pos,Rot={x=0,y=0,z=yaw}})
         if ok then result=value else err=value end
     end
     local entity=self:FindSpawned(ai,result,name)
-    if not entity and asset.archetype=="Horse" and System.SpawnEntity then
+    if not entity and class=="Horse" and System.SpawnEntity then
         local ok,horse=pcall(System.SpawnEntity,{class="Horse",name=name,position=pos,orientation={x=0,y=1,z=0}})
         if ok and type(horse)=="table" and horse.id then entity=horse end
     end
@@ -110,7 +129,7 @@ function ModMasterDev:SpawnSoul(asset,pos)
             self:Guard(function()
                 local late=self:FindSpawned(ai,nil,name)
                 if late then self:TrackSoul(late,name,asset,pos,yaw);self:RefreshMenu()
-                else self:Log("Spawn of " .. asset.name .. " did not appear") end
+                else self:Log("Spawn of " .. asset.name .. " did not appear (class " .. class .. ", soul " .. guid .. ")") end
             end)
         end)
     end

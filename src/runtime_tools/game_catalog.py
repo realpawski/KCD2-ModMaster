@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-CATALOG_VERSION = 3
+CATALOG_VERSION = 4
 HUMAN_ARCHETYPES = ("NPC", "NPC_Female", "NPC_Child", "Hero", "Hero_female")
 WEAPON_TAGS = ("MeleeWeapon", "MissileWeapon", "Ammo")
 ARMOR_TAGS = ("Armor", "Helmet", "Hood")
@@ -49,21 +49,29 @@ def _attrs(row: str) -> dict:
     return dict(re.findall(r'(\w+)="([^"]*)"', row))
 
 
-def _souls(tables: Path) -> dict:
-    """Spawnable NPCs and animals: one entry per soul plus a random one per archetype."""
-    assets = {}
+def _entity_classes(game: Path) -> set[str]:
+    try:
+        with zipfile.ZipFile(game / "Data" / "Scripts.pak") as z:
+            return {n.rsplit("/", 1)[1][:-4] for n in z.namelist()
+                    if n.startswith("Scripts/Entities/AI/") and n.count("/") == 3 and n.endswith(".lua")}
+    except (OSError, zipfile.BadZipFile):
+        return set()
+
+
+def _souls(tables: Path, classes: set[str]) -> dict:
+    """Spawnable NPCs and animals: one entry per soul plus a random one per archetype that has souls."""
+    def entity_class(archetype: str) -> str:
+        if archetype in classes:
+            return archetype
+        return "NPC" if archetype in HUMAN_ARCHETYPES else ""
+
+    souls, archetypes = {}, {}
     with zipfile.ZipFile(tables) as z:
         names = z.namelist()
-        archetypes = {}
         if "Libs/Tables/rpg/soul_archetype.xml" in names:
             for row in re.findall(r"<soul_archetype [^>]*/>", z.read("Libs/Tables/rpg/soul_archetype.xml").decode("utf-8", "replace")):
                 a = _attrs(row)
                 archetypes[a.get("soul_archetype_id")] = a.get("soul_archetype_name", "")
-        for archetype in sorted(set(archetypes.values()) - {"Hero", "Hero_female", ""}):
-            category = "npcs" if archetype in HUMAN_ARCHETYPES else "animals"
-            assets["soul:" + archetype] = {
-                "id": "soul:" + archetype, "name": f"Random {archetype.replace('_', ' ')}", "category": category,
-                "spawn_type": "soul", "archetype": archetype, "status": "installed_game_database", "source": "base_game"}
         for name in sorted(names):
             if not re.search(r"Libs/Tables/rpg/soul(__[^/]*)?\.xml$", name) or "test" in name.lower():
                 continue
@@ -74,13 +82,22 @@ def _souls(tables: Path) -> dict:
                 except ValueError:
                     continue
                 archetype = archetypes.get(a.get("soul_archetype_id"), "")
-                if archetype in ("Hero", "Hero_female"):
+                if archetype in ("Hero", "Hero_female") or not entity_class(archetype):
                     continue
-                assets["soul:" + guid] = {
+                souls["soul:" + guid] = {
                     "id": "soul:" + guid, "name": a.get("soul_name", guid),
                     "category": "npcs" if archetype in HUMAN_ARCHETYPES else "animals",
                     "spawn_type": "soul", "soul_guid": guid, "archetype": archetype,
+                    "entity_class": entity_class(archetype),
                     "status": "installed_game_database", "source": "base_game"}
+    assets = {}
+    for archetype in sorted({s["archetype"] for s in souls.values()}):
+        assets["soul:" + archetype] = {
+            "id": "soul:" + archetype, "name": f"Random {archetype.replace('_', ' ')}",
+            "category": "npcs" if archetype in HUMAN_ARCHETYPES else "animals", "spawn_type": "soul",
+            "archetype": archetype, "entity_class": entity_class(archetype),
+            "status": "installed_game_database", "source": "base_game"}
+    assets.update(souls)
     return assets
 
 
@@ -103,7 +120,7 @@ def build(game: Path) -> dict:
     if not tables.is_file():
         raise ValueError(f"Tables.pak not found in {game / 'Data'}")
     assets = _items(tables)
-    assets.update(_souls(tables))
+    assets.update(_souls(tables, _entity_classes(game)))
     for model in _models(game):
         assets["model:" + model] = {
             "id": "model:" + model, "name": Path(model).stem, "category": "props",
