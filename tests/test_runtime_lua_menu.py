@@ -422,7 +422,7 @@ def test_friends_of_henry_are_walked_back_and_never_hidden():
    follow=true,source="compiled_custom"},{x=20,y=0,z=0})
  ''')
  assert lua.eval('#hidden')==0  # hiding a creature while its look loads crashed the game
- assert lua.eval('#goto')==1 and abs(lua.eval('goto[1].x')-2.5)<1e-9  # walked to 2.5 m from Henry
+ assert lua.eval('#goto')==1 and abs(lua.eval('goto[1].x')-3)<1e-9  # sent to 3 m from Henry
  lua.execute('for i=#timers,1,-1 do local fn=timers[i];timers[i]=function() end;fn() end')
  assert lua.eval('#hidden')==0
 
@@ -481,15 +481,20 @@ def test_test_area_without_collision_returns_henry_at_once():
  assert lua.eval('ModMasterDev.testArea')is None and abs(lua.eval('worldPos.z')-10.2)<1e-9
 
 
-def test_friends_out_of_sight_are_set_down_behind_henry():
+def test_friends_walk_after_henry_and_are_only_set_down_when_lost():
  lua=runtime()
  lua.execute('''
-  worldPos={x=0,y=0,z=0}
-  local pal={id=3,soul={},GetWorldPos=function() return {x=0,y=-40,z=0} end,SetWorldPos=function(self,p) placed=p end}
+  worldPos={x=0,y=0,z=0};moves={}
+  local actor={SetMovementTarget=function(self,pos,target,up,speed) table.insert(moves,{target=target,speed=speed}) end}
+  pal={id=3,soul={},actor=actor,GetWorldPos=function() return palPos end,SetWorldPos=function(self,p) placed=p end}
+  palPos={x=0,y=-20,z=0}
   System.GetEntity=function(id) return pal end
   ModMasterDev:FollowTick(pal,{name="Pal"},2)
  ''')
- assert lua.eval('placed.x')==0 and abs(lua.eval('placed.y')+4)<1e-9  # 4 m behind Henry, out of view
+ assert lua.eval('#moves')==1 and lua.eval('moves[1].speed')==4  # runs when far behind
+ assert abs(lua.eval('moves[1].target.y')+3)<1e-9 and lua.eval('placed') is None
+ lua.execute('palPos={x=0,y=-80,z=0};ModMasterDev:FollowTick(pal,{name="Pal"},3)')
+ assert abs(lua.eval('placed.y')+4)<1e-9  # lost and out of view: set down behind Henry
 
 
 def test_unloaded_classes_spawn_with_their_default_soul():

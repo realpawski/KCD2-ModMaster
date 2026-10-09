@@ -198,17 +198,26 @@ function ModMasterDev:FollowTick(entity,asset,tick)
         local a,b=p:GetWorldPos(),entity:GetWorldPos()
         local dx,dy=b.x-a.x,b.y-a.y
         local dist=math.sqrt(dx*dx+dy*dy)
-        if dist>20 and self:OutOfView(b) then
+        local actor=entity.actor
+        if dist>5 and actor and actor.SetMovementTarget then
+            -- Walk, or run when far behind, to a spot a few metres from Henry on the creature's side.
+            local target={x=a.x+dx/dist*3,y=a.y+dy/dist*3,z=a.z}
+            local ok,err=pcall(actor.SetMovementTarget,actor,b,target,{x=0,y=0,z=1},dist>12 and 4 or 1.5)
+            if not self.followLogged or not ok then
+                self.followLogged=true
+                self:Log(asset.name .. " follows Henry: " .. (ok and "walking" or tostring(err)))
+            end
+        elseif dist>5 and type(ai)=="table" and ai.GoTo then
+            pcall(ai.GoTo,entity.id,{x=a.x+dx/dist*3,y=a.y+dy/dist*3,z=a.z})
+        end
+        -- Last resort when it is truly lost: set it down behind Henry where nobody sees it appear.
+        if dist>60 and self:OutOfView(b) then
             local dir=System.GetViewCameraDir and System.GetViewCameraDir() or {x=0,y=1,z=0}
             local len=math.sqrt(dir.x*dir.x+dir.y*dir.y)
             if len>0.01 then
                 pcall(entity.SetWorldPos,entity,{x=a.x-dir.x/len*4,y=a.y-dir.y/len*4,z=a.z+0.3})
-                if not self.leashLogged then self.leashLogged=true;self:Log(asset.name .. " stays close: set down behind Henry") end
+                if not self.leashLogged then self.leashLogged=true;self:Log(asset.name .. " was lost: set down behind Henry") end
             end
-        elseif dist>5 and type(ai)=="table" and ai.GoTo then
-            local back=dist>0.1 and 2.5/dist or 0
-            local ok,err=pcall(ai.GoTo,entity.id,{x=a.x+dx*back,y=a.y+dy*back,z=a.z})
-            if tick==1 or not ok then self:Log(asset.name .. " follows Henry: " .. (ok and "on its way" or tostring(err))) end
         end
     end
     if Script and Script.SetTimer then
