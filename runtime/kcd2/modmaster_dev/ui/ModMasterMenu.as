@@ -109,6 +109,7 @@ class ModMasterMenu {
    add("Fast Multiplier  < "+(Math.round(settingValues[1]*100)/100)+"x >","setting:1","Left / Right: adjust the Shift speed multiplier. Enter: apply.",undefined);
    add("Precision Multiplier  < "+(Math.round(settingValues[2]*100)/100)+"x >","setting:2","Left / Right: adjust the Ctrl speed multiplier. Enter: apply.",undefined);
   } else if(active=="WORLD") {
+   add("Test Area: Enter / Leave","test_area","Takes Henry to a flat platform 2 km wide, high above the map, with noon light. Try creatures, weapons and props there undisturbed. Choose it again to return exactly where you were.",undefined);
    add("Photo Mode Range: Unlimited","photomode:unlimited","Lets the F1 photo mode camera travel as far as you like instead of staying in a small box around Henry. Current session.",undefined);
    add("Photo Mode Range: Default","photomode:default","Restores the game's own photo mode range.",undefined);
    add("Morning","time:7","Preview 07:00 lighting.",undefined);add("Noon","time:12","Preview 12:00 lighting.",undefined);add("Sunset","time:19","Preview 19:00 lighting.",undefined);add("Night","time:0","Preview midnight lighting.",undefined);add("Restore Lighting","restore_world","Restore normal lighting.",undefined);

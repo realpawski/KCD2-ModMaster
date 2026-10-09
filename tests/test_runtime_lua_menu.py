@@ -449,6 +449,49 @@ def test_menu_offers_give_for_items_it_labels_as_game_items():
  assert '"GAME ITEM (Equippable)"' in menu and 'indexOf("GAME ITEM")' in swf
 
 
+def test_test_area_takes_henry_up_keeps_him_on_it_and_brings_him_home():
+ lua=runtime()
+ lua.execute('''
+  worldPos={x=100,y=200,z=50};spawns={};removed={}
+  System.SpawnEntity=function(spec) table.insert(spawns,spec);return {id=77,SetScale=function(self,s) scaled=s end} end
+  System.RemoveEntity=function(id) table.insert(removed,id) end
+ ''')
+ open_menu(lua);event(lua,'test_area')
+ assert lua.eval('spawns[1].properties.object_Model')=='EngineAssets/Objects/primitive_plane.cgf'
+ assert lua.eval('spawns[1].position.z')==1550 and lua.eval('scaled')==2000
+ assert abs(lua.eval('worldPos.z')-1550.3)<1e-9 and lua.eval('hour')==12
+ lua.execute('for i=1,10 do timers[#timers]() end')  # standing on the platform
+ lua.execute('worldPos={x=900,y=200,z=1400};timers[#timers]()')  # walked off the edge later on
+ assert abs(lua.eval('worldPos.z')-1550.3)<1e-9 and lua.eval('worldPos.x')==100
+ event(lua,'test_area')
+ assert lua.eval('worldPos.x')==100 and abs(lua.eval('worldPos.z')-50.2)<1e-9
+ assert lua.eval('removed[1]')==77 and lua.eval('hour') is None
+
+
+def test_test_area_without_collision_returns_henry_at_once():
+ lua=runtime()
+ lua.execute('''
+  worldPos={x=0,y=0,z=10}
+  System.SpawnEntity=function(spec) return {id=5} end
+  System.RemoveEntity=function() end
+  ModMasterDev:ToggleTestArea()
+  worldPos={x=0,y=0,z=1490}
+  timers[#timers]()
+ ''')
+ assert lua.eval('ModMasterDev.testArea')is None and abs(lua.eval('worldPos.z')-10.2)<1e-9
+
+
+def test_friends_out_of_sight_are_set_down_behind_henry():
+ lua=runtime()
+ lua.execute('''
+  worldPos={x=0,y=0,z=0}
+  local pal={id=3,soul={},GetWorldPos=function() return {x=0,y=-40,z=0} end,SetWorldPos=function(self,p) placed=p end}
+  System.GetEntity=function(id) return pal end
+  ModMasterDev:FollowTick(pal,{name="Pal"},2)
+ ''')
+ assert lua.eval('placed.x')==0 and abs(lua.eval('placed.y')+4)<1e-9  # 4 m behind Henry, out of view
+
+
 def test_unloaded_classes_spawn_with_their_default_soul():
  lua=runtime()
  lua.execute('''

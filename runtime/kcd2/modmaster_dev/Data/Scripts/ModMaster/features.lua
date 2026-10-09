@@ -144,6 +144,63 @@ function ModMasterDev:EspTick(generation)
     if Script and Script.SetTimer then Script.SetTimer(16,function() self:EspTick(generation) end) end
 end
 
+-- The engine's 1 m plane carries its own collision, so scaled up it makes a flat test floor.
+ModMasterTestAreaModel="EngineAssets/Objects/primitive_plane.cgf"
+ModMasterTestAreaHeight=1500
+ModMasterTestAreaSize=2000
+
+function ModMasterDev:ToggleTestArea()
+    if self.testArea then return self:LeaveTestArea("Back from the test area") end
+    local p=self:PlayerEntity()
+    if not p or not p.GetWorldPos or not p.SetWorldPos or not System.SpawnEntity then
+        return self:Log("Test area unavailable in this build")
+    end
+    local home=self:CopyVector(p:GetWorldPos())
+    local z=home.z+ModMasterTestAreaHeight
+    local ok,plane=pcall(System.SpawnEntity,{class="BasicEntity",name="ModMasterTestArea",
+        position={x=home.x,y=home.y,z=z},scale=ModMasterTestAreaSize,
+        properties={object_Model=ModMasterTestAreaModel,bCanTriggerAreas=false,bSaved_by_game=false,
+            Physics={bPhysicalize=true,bRigidBody=false,bPushableByPlayers=false,Mass=0,Density=0},
+            MultiplayerOptions={bNetworked=false}}})
+    if not ok or type(plane)~="table" or not plane.id then return self:Log("The test area platform could not be created") end
+    if plane.SetScale then pcall(plane.SetScale,plane,ModMasterTestAreaSize) end
+    local area={plane=plane,home=home,z=z,center={x=home.x,y=home.y,z=z+0.3}}
+    if Calendar and Calendar.SetFakeTimeOfDay and Calendar.IsFakedTimeOfDay and not Calendar.IsFakedTimeOfDay() then
+        pcall(Calendar.SetFakeTimeOfDay,12);area.time=true
+    end
+    self.testArea=area
+    p:SetWorldPos(area.center)
+    self:Log("Test area: a flat platform 2 km wide, 1500 m above the map, at noon. Choose Test Area again to go back.")
+    self:WatchTestArea(area,0)
+end
+
+-- Henry is put back on the platform if he walks off; without collision he goes straight home instead.
+function ModMasterDev:WatchTestArea(area,tick)
+    if self.testArea~=area then return end
+    local p=self:PlayerEntity()
+    if not p then return self:LeaveTestArea("Test area closed") end
+    local pos=p:GetWorldPos()
+    if pos.z<area.z-5 then
+        if tick<8 then return self:LeaveTestArea("The platform has no collision here, so you are back where you were") end
+        p:SetWorldPos(area.center)
+        self:Log("Back on the test platform")
+    end
+    if Script and Script.SetTimer then
+        Script.SetTimer(250,function() self:Guard(function() self:WatchTestArea(area,tick+1) end) end)
+    end
+end
+
+function ModMasterDev:LeaveTestArea(reason)
+    local area=self.testArea
+    if not area then return end
+    self.testArea=nil
+    local p=self:PlayerEntity()
+    if p and p.SetWorldPos then p:SetWorldPos({x=area.home.x,y=area.home.y,z=area.home.z+0.2}) end
+    if System.RemoveEntity then pcall(System.RemoveEntity,area.plane.id) end
+    if area.time and Calendar and Calendar.UnfakeTimeOfDay then pcall(Calendar.UnfakeTimeOfDay) end
+    self:Log(reason)
+end
+
 ModMasterPhotoRangeCVar="wh_photomode_MaxDistance"
 
 -- F1 photo mode keeps its camera inside a small box around Henry; this widens that box.

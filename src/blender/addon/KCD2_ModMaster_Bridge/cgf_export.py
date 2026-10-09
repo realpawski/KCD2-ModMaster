@@ -90,6 +90,41 @@ def _save_tif(image, path: Path) -> Path:
     return path
 
 
+def _pot_pixels(image, size=None):
+    """RGBA floats of an image at a power-of-two size (or the given one), rows top to bottom."""
+    import numpy as np
+
+    copy = image.copy()
+    try:
+        w, h = copy.size
+        pot = lambda v: 1 << max(v - 1, 1).bit_length()
+        target = size or (pot(w), pot(h))
+        if (w, h) != target:
+            copy.scale(*target)
+        pixels = np.empty(target[0] * target[1] * 4, dtype=np.float32)
+        copy.pixels.foreach_get(pixels)
+    finally:
+        bpy.data.images.remove(copy)
+    return target, pixels.reshape(target[1], target[0], 4)[::-1]
+
+
+def _save_ddna(normal, roughness, path: Path) -> Path:
+    """Normal map with smoothness (1 - roughness) in alpha, the layout of the game's _ddna textures."""
+    import numpy as np
+
+    if normal is not None:
+        size, pixels = _pot_pixels(normal)
+    else:
+        size, rough = _pot_pixels(roughness)
+        pixels = np.empty_like(rough)
+        pixels[..., 0:3] = (0.5, 0.5, 1.0)
+    _size, rough = _pot_pixels(roughness, size)
+    pixels = pixels.copy()
+    pixels[..., 3] = 1.0 - rough[..., 0]
+    data = (np.clip(pixels, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8).tobytes()
+    return cry_compile.write_tiff_rgba(path, size[0], size[1], data)
+
+
 def _game_textures(source: dict, mtl_path: str) -> dict:
     folder = str(Path(mtl_path).parent.as_posix()) if mtl_path else ""
     result = {}
@@ -128,7 +163,12 @@ def _material_entry(mat, name: str, rc: Path, work: Path, tex_root: Path, tex_vi
     elif base is not None:
         entry["diffuse"] = tuple(base.default_value)[:3]
     normal = _image_input(principled.inputs.get("Normal"))
-    if normal:
+    roughness = _image_input(principled.inputs.get("Roughness"))
+    if roughness:
+        tif = _save_ddna(normal, roughness, work / f"{stem}_ddna.tif")
+        cry_compile.compile_texture(rc, tif, tex_root / f"{stem}_ddna.dds", "NormalsWithSmoothness")
+        entry["textures"]["Bumpmap"] = f"{tex_virtual}/{stem}_ddna.dds"
+    elif normal:
         tif = _save_tif(normal, work / f"{stem}_ddna.tif")
         cry_compile.compile_texture(rc, tif, tex_root / f"{stem}_ddna.dds", "Normals")
         entry["textures"]["Bumpmap"] = f"{tex_virtual}/{stem}_ddna.dds"
@@ -382,6 +422,9 @@ class KCD2_AddonPreferences(bpy.types.AddonPreferences):
     workspace_dir: bpy.props.StringProperty(
         name="ModMaster workspace", subtype="DIR_PATH",
         description="Used when the scene was not opened from ModMaster")
+    substance_path: bpy.props.StringProperty(
+        name="Substance 3D Painter", subtype="FILE_PATH",
+        description="Found automatically in the default Adobe and Steam folders")
 
     def draw(self, context):
         layout = self.layout
@@ -389,6 +432,10 @@ class KCD2_AddonPreferences(bpy.types.AddonPreferences):
         found = cry_compile.find_rc(self.rc_path)
         layout.label(text=str(found) if found else "rc.exe not found", icon=icon("CHECKMARK" if found else "ERROR"))
         layout.prop(self, "workspace_dir")
+        layout.prop(self, "substance_path")
+        painter = cry_compile.find_painter(self.substance_path)
+        layout.label(text=str(painter) if painter else "Substance 3D Painter not found",
+                     icon=icon("CHECKMARK" if painter else "INFO"))
 
 
 CLASSES = [KCD2_OT_export_cgf, KCD2_AddonPreferences]

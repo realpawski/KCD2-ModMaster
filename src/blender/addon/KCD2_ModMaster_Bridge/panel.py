@@ -77,6 +77,9 @@ class KCD2_PT_modmaster_panel(bpy.types.Panel):
         col_mat.operator("kcd2.sync_textures", text="SYNC TEXTURES", icon=icon('IMAGE_DATA'))
         col_mat.operator("kcd2.build_materials", text="BUILD MATERIALS", icon=icon('SHADING_RENDERED'))
         col_mat.operator("kcd2.rebuild_materials", text="REBUILD MATERIALS", icon=icon('FILE_REFRESH'))
+        col_sub = box_mat.column(align=True)
+        col_sub.operator("kcd2.open_substance", text="OPEN IN SUBSTANCE PAINTER", icon=icon('BRUSH_DATA'))
+        col_sub.operator("kcd2.import_substance", text="IMPORT SUBSTANCE TEXTURES", icon=icon('TEXTURE'))
 
         layout.separator()
         col_exp = layout.column(align=True)

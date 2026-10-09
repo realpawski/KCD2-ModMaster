@@ -150,3 +150,29 @@ def test_rigged_asset_is_packed_as_animated_character(manager):
     project.assign_asset("pig")
     entry = json.loads((manager.build_project(project) / "modmaster_assets.json").read_text())["assets"][0]
     assert entry["model_path"] == "Objects/modmaster/pig/pig.cdf" and "animation" in entry
+
+
+def test_substance_exports_are_matched_to_their_materials():
+    from pathlib import Path
+
+    from compiler import cry_compile
+    cc = cry_compile()
+    files = [Path(n) for n in ("boar_hair_BaseColor.png", "boar_hair_Normal.png", "boar_hair_Roughness.png",
+                               "Jacket_Base_Base_Color.png", "Jacket_Base_Normal_DirectX.png",
+                               "Jacket_Base_Metallic.png", "other_Height.png", "readme.txt")]
+    matched = cc.match_substance_textures(files, ["boar_hair [ModMaster]", "Jacket_Base", "unused"])
+    assert set(matched) == {"boar_hair [ModMaster]", "Jacket_Base"}
+    assert matched["boar_hair [ModMaster]"]["roughness"].name == "boar_hair_Roughness.png"
+    assert matched["Jacket_Base"]["normal"].name == "Jacket_Base_Normal_DirectX.png"
+    assert matched["Jacket_Base"]["base"].name == "Jacket_Base_Base_Color.png"
+
+
+def test_rgba_tiff_keeps_its_alpha_channel(tmp_path):
+    from PIL import Image
+
+    from compiler import cry_compile
+    pixels = bytes([10, 20, 30, 40]) * 4 + bytes([200, 100, 50, 250]) * 4
+    path = cry_compile().write_tiff_rgba(tmp_path / "t.tif", 4, 2, pixels)
+    with Image.open(path) as image:
+        assert image.mode == "RGBA" and image.size == (4, 2)
+        assert image.getpixel((0, 0)) == (10, 20, 30, 40) and image.getpixel((3, 1)) == (200, 100, 50, 250)

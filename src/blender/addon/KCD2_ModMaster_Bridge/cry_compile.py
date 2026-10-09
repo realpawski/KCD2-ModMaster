@@ -228,3 +228,82 @@ def compile_skin(rc: Path, dae: Path, target_skin: Path) -> list[str]:
         target_skin.parent.mkdir(parents=True, exist_ok=True)
         target_skin.write_bytes(data)
         return subs
+
+
+# --- Substance Painter -------------------------------------------------------------------------------------
+
+PAINTER_PATHS = (
+    Path(r"C:\Program Files\Adobe\Adobe Substance 3D Painter\Adobe Substance 3D Painter.exe"),
+    Path(r"C:\Program Files\Allegorithmic\Substance Painter\Substance Painter.exe"),
+)
+SUBSTANCE_CHANNELS = (
+    ("basecolor", "base"), ("albedo", "base"), ("diffuse", "base"),
+    ("normaldirectx", "normal"), ("normalopengl", "normal"), ("normal", "normal"),
+    ("roughness", "roughness"), ("metalness", "metallic"), ("metallic", "metallic"),
+)
+IMAGE_SUFFIXES = (".png", ".tga", ".tif", ".tiff", ".jpg", ".jpeg", ".exr")
+
+
+def find_painter(configured: str | None = None) -> Path | None:
+    candidates = [Path(configured)] if configured else []
+    candidates += list(PAINTER_PATHS)
+    for library in _steam_libraries():
+        common = library / "steamapps" / "common"
+        if common.is_dir():
+            candidates += sorted(common.glob("*Substance*Painter*/*Painter*.exe"))
+    return next((c for c in candidates if c.is_file()), None)
+
+
+def _key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def texture_set(material_name: str) -> str:
+    """The name Painter gives a material's texture set, without ModMaster's own suffix."""
+    return re.sub(r"\s*\[ModMaster\]$", "", material_name)
+
+
+def match_substance_textures(files: list[Path], material_names: list[str]) -> dict[str, dict[str, Path]]:
+    """material -> {base|normal|roughness|metallic: file} from Painter's <TextureSet>_<Channel> exports."""
+    wanted = {_key(texture_set(name)): name for name in material_names}
+    result: dict[str, dict[str, Path]] = {}
+    for file in sorted(files):
+        if file.suffix.lower() not in IMAGE_SUFFIXES:
+            continue
+        stem = _key(file.stem)
+        for channel, slot in SUBSTANCE_CHANNELS:
+            if stem.endswith(channel) and stem[:-len(channel)] in wanted:
+                result.setdefault(wanted[stem[:-len(channel)]], {}).setdefault(slot, file)
+                break
+    return result
+
+
+def write_tiff_rgba(path: Path, width: int, height: int, pixels: bytes) -> Path:
+    """An uncompressed 8-bit RGBA TIFF; rows top to bottom. The alpha channel survives, unlike Blender's saver."""
+    if len(pixels) != width * height * 4:
+        raise ValueError("Pixel data does not match the image size")
+    entries = [
+        (256, 4, 1, width), (257, 4, 1, height), (258, 3, 4, None), (259, 3, 1, 1), (262, 3, 1, 2),
+        (273, 4, 1, None), (277, 3, 1, 4), (278, 4, 1, height), (279, 4, 1, len(pixels)), (284, 3, 1, 1),
+        (338, 3, 1, 2),
+    ]
+    ifd_offset = 8
+    ifd_size = 2 + len(entries) * 12 + 4
+    bits_offset = ifd_offset + ifd_size
+    data_offset = bits_offset + 8
+    out = bytearray(struct.pack("<2sHI", b"II", 42, ifd_offset))
+    out += struct.pack("<H", len(entries))
+    for tag, kind, count, value in entries:
+        if tag == 258:
+            out += struct.pack("<HHII", tag, kind, count, bits_offset)
+        elif tag == 273:
+            out += struct.pack("<HHII", tag, kind, count, data_offset)
+        elif kind == 3:
+            out += struct.pack("<HHIHH", tag, kind, count, value, 0)
+        else:
+            out += struct.pack("<HHII", tag, kind, count, value)
+    out += struct.pack("<I", 0)
+    out += struct.pack("<4H", 8, 8, 8, 8)
+    out += pixels
+    Path(path).write_bytes(bytes(out))
+    return Path(path)

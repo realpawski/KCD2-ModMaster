@@ -19,7 +19,7 @@ bl_info = {
     "category": "Import-Export",
 }
 
-from . import bridge, cgf_export, metadata, operators, panel, workspace
+from . import bridge, cgf_export, metadata, operators, panel, substance, workspace
 
 log = logging.getLogger("KCD2_ModMaster_Bridge")
 
@@ -64,6 +64,7 @@ def register() -> None:
     global _timer_registered
     operators.register()
     cgf_export.register()
+    substance.register()
     panel.register()
 
     # Start IPC listener client
@@ -95,6 +96,7 @@ def unregister() -> None:
         pass
 
     panel.unregister()
+    substance.unregister()
     cgf_export.unregister()
     operators.unregister()
     log.info("KCD2 ModMaster Bridge addon unregistered.")

@@ -176,6 +176,15 @@ function ModMasterDev:ApplyLook(entity,asset,model,attempt)
 end
 
 -- Animal brains do not follow anyone, so a friend of Henry is walked back to him when it strays.
+function ModMasterDev:OutOfView(pos)
+    local cam=System.GetViewCameraPos and System.GetViewCameraPos()
+    local dir=System.GetViewCameraDir and System.GetViewCameraDir()
+    if not cam or not dir then return true end
+    local vx,vy,vz=pos.x-cam.x,pos.y-cam.y,pos.z-cam.z
+    local len=math.sqrt(vx*vx+vy*vy+vz*vz)
+    return len<0.01 or (vx*dir.x+vy*dir.y+vz*dir.z)/len<0.5
+end
+
 function ModMasterDev:FollowTick(entity,asset,tick)
     if System.GetEntity and System.GetEntity(entity.id)~=entity then return end
     local soul=entity.soul
@@ -185,18 +194,22 @@ function ModMasterDev:FollowTick(entity,asset,tick)
     end
     local p=self:PlayerEntity()
     local ai=rawget(_G,"AI")
-    if p and type(ai)=="table" and ai.GoTo then
+    if p then
         local a,b=p:GetWorldPos(),entity:GetWorldPos()
         local dx,dy=b.x-a.x,b.y-a.y
         local dist=math.sqrt(dx*dx+dy*dy)
-        if dist>5 then
+        if dist>20 and self:OutOfView(b) then
+            local dir=System.GetViewCameraDir and System.GetViewCameraDir() or {x=0,y=1,z=0}
+            local len=math.sqrt(dir.x*dir.x+dir.y*dir.y)
+            if len>0.01 then
+                pcall(entity.SetWorldPos,entity,{x=a.x-dir.x/len*4,y=a.y-dir.y/len*4,z=a.z+0.3})
+                if not self.leashLogged then self.leashLogged=true;self:Log(asset.name .. " stays close: set down behind Henry") end
+            end
+        elseif dist>5 and type(ai)=="table" and ai.GoTo then
             local back=dist>0.1 and 2.5/dist or 0
             local ok,err=pcall(ai.GoTo,entity.id,{x=a.x+dx*back,y=a.y+dy*back,z=a.z})
             if tick==1 or not ok then self:Log(asset.name .. " follows Henry: " .. (ok and "on its way" or tostring(err))) end
         end
-    elseif tick==1 then
-        self:Log(asset.name .. ": AI.GoTo is unavailable, it cannot follow Henry")
-        return
     end
     if Script and Script.SetTimer then
         Script.SetTimer(1000,function() self:Guard(function() self:FollowTick(entity,asset,tick+1) end) end)
