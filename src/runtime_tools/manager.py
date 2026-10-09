@@ -5,6 +5,7 @@ import json
 import hashlib
 import logging
 import shutil
+import struct
 import tempfile
 import uuid
 import zipfile
@@ -356,6 +357,7 @@ class RuntimeManager:
 
         items = [s.item for s in stored]
         extra = {item_table_path(project.id): generate_item_xml(items, project.id).encode("ascii")}
+        extra.update(self._item_attachments(stored, catalog))
         from items.icons import icon_dds, icon_game_path
         for item in items:
             icon = root / item.icon_image if item.icon_image else None
@@ -365,6 +367,36 @@ class RuntimeManager:
         if preset:
             extra[inventory_preset_path(project.id)] = preset.encode("ascii")
         return items, extra
+
+    def _item_attachments(self, stored, catalog) -> dict[str, bytes]:
+        """Compiled item models with the grip, scabbard, pickup and physics points of their base item."""
+        from compiler.attachments import graft_attachments
+        from runtime_tools.animations import _game_files, _read
+
+        result: dict[str, bytes] = {}
+        files = None
+        for s in stored:
+            item, asset_dir = s.item, s.asset_dir
+            if not item.uses_custom_model or asset_dir is None or not item.model_path:
+                continue
+            compiled = asset_dir / "compiled" / "Objects" / item.model_path
+            base = catalog.item(item.base_guid) if item.base_guid else None
+            base_model = base.attrs.get("Model", "") if base else ""
+            if not compiled.is_file() or not base_model.lower().endswith(".cgf"):
+                continue
+            files = files if files is not None else _game_files(self.game)
+            source = _read(files, "Objects/" + base_model)
+            if not source:
+                continue
+            try:
+                data, added = graft_attachments(compiled.read_bytes(), source)
+            except (ValueError, struct.error) as exc:
+                log.warning("Attachment points of %s not copied: %s", base_model, exc)
+                continue
+            if added:
+                result["Objects/" + item.model_path] = data
+                self._audit("item_attachments", item=item.item_id, base=base_model, nodes=added)
+        return result
 
     def _stage_compiled_assets(self, project, items, creatures=()) -> tuple[list[dict], dict[str, bytes]]:
         from compiler import cdf_skeleton, compiled_files, compiled_models
