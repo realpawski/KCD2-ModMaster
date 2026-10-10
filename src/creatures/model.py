@@ -19,7 +19,7 @@ class Attitude:
     brain: str = ""  # a game brain replacing the body's own; empty keeps it
 
 
-# The player's dog follows Henry through the engine's companion system; animal brains cannot follow anyone.
+# The dog's companion brain keeps a friend from wandering off; the in-game menu walks it after Henry.
 DOG_COMPANION_BRAIN = "4cacb48f-6ebb-71c5-331d-179b9769809b"
 
 
@@ -31,9 +31,8 @@ ANIMAL_ATTITUDES = (
     Attitude("domestic", "Domestic", "Belongs to the village like farm animals. People treat it as theirs and "
              "guards react when someone harms it.", "animal_home"),
     Attitude("hostile", "Hostile", "Attacks Henry on sight, like the wolves in the game.", "animal_wild_enemy"),
-    Attitude("companion", "Friend of Henry", "Thinks like Henry's dog: follows him, stays close and stands "
-             "with him against enemies. Experimental on bodies other than the dog.", "animalCompanions",
-             DOG_COMPANION_BRAIN),
+    Attitude("companion", "Friend of Henry", "Follows Henry on its own legs with the body's walk, trot and "
+             "gallop, stays close and stands with him against enemies.", "animalCompanions", DOG_COMPANION_BRAIN),
 )
 
 HUMAN_ATTITUDES = (

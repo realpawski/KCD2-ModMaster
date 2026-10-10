@@ -175,7 +175,8 @@ function ModMasterDev:ApplyLook(entity,asset,model,attempt)
     end
 end
 
--- Animal brains do not follow anyone, so a friend of Henry is walked back to him when it strays.
+-- Animal brains do not follow anyone, so the script walks a friend of Henry itself, playing the body's own
+-- walk, trot and gallop loops while it moves the creature over the ground.
 function ModMasterDev:OutOfView(pos)
     local cam=System.GetViewCameraPos and System.GetViewCameraPos()
     local dir=System.GetViewCameraDir and System.GetViewCameraDir()
@@ -205,14 +206,9 @@ function ModMasterDev:FollowTick(entity,asset,tick)
                 tostring(actor~=nil),tostring(actor~=nil and actor.SetMovementTarget~=nil),
                 tostring(type(ai)=="table" and ai.GoTo~=nil)))
         end
-        if dist>5 and actor and actor.SetMovementTarget then
-            -- Walk, or run when far behind, to a spot a few metres from Henry on the creature's side.
-            local target={x=a.x+dx/dist*3,y=a.y+dy/dist*3,z=a.z}
-            local ok,err=pcall(actor.SetMovementTarget,actor,b,target,{x=0,y=0,z=1},dist>12 and 4 or 1.5)
-            if not self.followLogged or not ok then
-                self.followLogged=true
-                self:Log(asset.name .. " follows Henry: " .. (ok and "walking" or tostring(err)))
-            end
+        if type(asset.gaits)=="table" and not self.walkers[entity.id] then
+            self.walkers[entity.id]={moving=false,last=self:Now()}
+            self:WalkTick(entity,asset)
         end
         -- Last resort when it is truly lost: set it down behind Henry where nobody sees it appear.
         if dist>60 and self:OutOfView(b) then
@@ -226,6 +222,75 @@ function ModMasterDev:FollowTick(entity,asset,tick)
     end
     if Script and Script.SetTimer then
         Script.SetTimer(1000,function() self:Guard(function() self:FollowTick(entity,asset,tick+1) end) end)
+    end
+end
+
+function ModMasterDev:GroundZ(x,y,fromZ,skip)
+    local phys=rawget(_G,"Physics")
+    if type(phys)=="table" and phys.RayWorldIntersection then
+        local ok,hits=pcall(phys.RayWorldIntersection,{x=x,y=y,z=fromZ+1.5},{x=0,y=0,z=-6},1,ent_all or 287,skip)
+        local hit=ok and type(hits)=="table" and hits[1]
+        if hit and hit.pos then return hit.pos.z end
+    end
+    if System.GetTerrainElevation then
+        local ok,z=pcall(System.GetTerrainElevation,{x=x,y=y,z=fromZ})
+        if ok and type(z)=="number" then return z end
+    end
+    return fromZ
+end
+
+function ModMasterDev:Gait(gaits,dist)
+    if dist>16 and gaits.run then return gaits.run,6.0 end
+    if dist>8 and gaits.trot then return gaits.trot,3.0 end
+    return gaits.walk or gaits.trot or gaits.run,1.5
+end
+
+function ModMasterDev:PlayLoop(entity,asset,anim)
+    if not anim or not entity.StartAnimation then return end
+    local ok,result=pcall(entity.StartAnimation,entity,0,anim,0,0.25,1.0,true)
+    if not self.gaitLogged then
+        self.gaitLogged=true
+        self:Log(string.format("%s walks with %s: %s",asset.name,anim,ok and tostring(result) or ("failed: " .. tostring(result))))
+    end
+end
+
+-- Starts at 5 m and stops 2.5 m from Henry, so the creature does not twitch between walking and standing.
+function ModMasterDev:WalkTick(entity,asset)
+    local state=self.walkers[entity.id]
+    if not state then return end
+    if System.GetEntity and System.GetEntity(entity.id)~=entity then self.walkers[entity.id]=nil;return end
+    local soul=entity.soul
+    if soul and soul.GetState then
+        local ok,hp=pcall(soul.GetState,soul,"health")
+        if ok and type(hp)=="number" and hp<=0 then self.walkers[entity.id]=nil;return end
+    end
+    local now=self:Now()
+    local dt=math.max(0,math.min(0.2,now-state.last))
+    state.last=now
+    local p=self:PlayerEntity()
+    if p then
+        local a,b=p:GetWorldPos(),entity:GetWorldPos()
+        local dx,dy=a.x-b.x,a.y-b.y
+        local dist=math.sqrt(dx*dx+dy*dy)
+        if dist>60 then
+            state.moving=false
+        elseif state.moving or dist>5 then
+            if dist<2.5 then
+                state.moving=false;state.anim=nil
+                self:PlayLoop(entity,asset,asset.gaits.idle)
+            else
+                state.moving=true
+                local anim,speed=self:Gait(asset.gaits,dist)
+                if anim~=state.anim then state.anim=anim;self:PlayLoop(entity,asset,anim) end
+                local step=math.min(speed*dt,dist-2.5)
+                local x,y=b.x+dx/dist*step,b.y+dy/dist*step
+                pcall(entity.SetWorldPos,entity,{x=x,y=y,z=self:GroundZ(x,y,b.z,entity.id)})
+                pcall(entity.SetWorldAngles,entity,{x=0,y=0,z=math.atan2(-dx,dy)})
+            end
+        end
+    end
+    if Script and Script.SetTimer then
+        Script.SetTimer(30,function() self:Guard(function() self:WalkTick(entity,asset) end) end)
     end
 end
 
@@ -250,7 +315,7 @@ function ModMasterDev:SpawnSoul(asset,pos)
     if not guid then return self:Log("No " .. tostring(asset.archetype) .. " souls in the registry") end
     local class=asset.entity_class or (asset.category=="npcs" and "NPC" or asset.archetype)
     local model=type(asset.model_path)=="string" and asset.model_path~="" and asset.model_path or nil
-    -- People are assembled from clothing parts; loading a model over them crashes the game.
+    -- People are dressed by their clothing config alone; loading a model over the assembled body crashed the game.
     if asset.category=="npcs" then model=nil end
     local clothing=type(asset.clothing_config)=="string" and asset.clothing_config:match("^[%w_]+$") and asset.clothing_config or nil
     self.serial=self.serial+1

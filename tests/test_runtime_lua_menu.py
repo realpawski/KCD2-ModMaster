@@ -481,19 +481,26 @@ def test_test_area_without_collision_returns_henry_at_once():
  assert lua.eval('ModMasterDev.testArea')is None and abs(lua.eval('worldPos.z')-10.2)<1e-9
 
 
-def test_friends_walk_after_henry_and_are_only_set_down_when_lost():
+def test_friends_walk_after_henry_with_their_own_gaits_and_are_only_set_down_when_lost():
  lua=runtime()
  lua.execute('''
-  worldPos={x=0,y=0,z=0};moves={}
-  local actor={SetMovementTarget=function(self,pos,target,up,speed) table.insert(moves,{target=target,speed=speed}) end}
-  pal={id=3,soul={},actor=actor,GetWorldPos=function() return palPos end,SetWorldPos=function(self,p) placed=p end}
+  worldPos={x=0,y=0,z=0};anims={};placed=nil
+  pal={id=3,soul={},GetWorldPos=function() return palPos end,SetWorldAngles=function(self,a) facing=a end,
+       SetWorldPos=function(self,p) placed=p;palPos=p end,
+       StartAnimation=function(self,slot,name,layer,blend,speed,loop) table.insert(anims,name);return true end}
   palPos={x=0,y=-20,z=0}
   System.GetEntity=function(id) return pal end
-  ModMasterDev:FollowTick(pal,{name="Pal"},2)
+  pet={name="Pal",gaits={idle="stand",walk="walk",trot="trot",run="gallop"}}
+  ModMasterDev:FollowTick(pal,pet,2)
+  fakeTime=0.1;ModMasterDev:WalkTick(pal,pet)
  ''')
- assert lua.eval('#moves')==1 and lua.eval('moves[1].speed')==4  # runs when far behind
- assert abs(lua.eval('moves[1].target.y')+3)<1e-9 and lua.eval('placed') is None
- lua.execute('palPos={x=0,y=-80,z=0};ModMasterDev:FollowTick(pal,{name="Pal"},3)')
+ assert lua.eval('anims[#anims]')=="gallop"  # far behind: gallops
+ assert abs(lua.eval('placed.y')+19.4)<1e-9 and abs(lua.eval('placed.x'))<1e-9  # 6 m/s for 0.1 s toward Henry
+ lua.execute('palPos={x=0,y=-6,z=0};fakeTime=0.2;ModMasterDev:WalkTick(pal,pet)')
+ assert lua.eval('anims[#anims]')=="walk"
+ lua.execute('palPos={x=0,y=-2,z=0};fakeTime=0.3;ModMasterDev:WalkTick(pal,pet)')
+ assert lua.eval('anims[#anims]')=="stand"  # close enough: stands
+ lua.execute('placed=nil;palPos={x=0,y=-80,z=0};ModMasterDev:FollowTick(pal,pet,3)')
  assert abs(lua.eval('placed.y')+4)<1e-9  # lost and out of view: set down behind Henry
 
 

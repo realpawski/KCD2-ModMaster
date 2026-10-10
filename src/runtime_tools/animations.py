@@ -56,6 +56,25 @@ def default_animation(names: list[str]) -> str:
     return names[0] if names else ""
 
 
+GAITS = (("idle", ("relaxed_idle", "idle")), ("walk", ("relaxed_walk", "walk")),
+         ("trot", ("relaxed_trot", "trot", "jog")), ("run", ("relaxed_gallop", "gallop", "run", "sprint")))
+# Transitions, turns and one-sided variants cannot loop while a creature walks straight on.
+NOT_A_LOOP = re.compile(r"_to_|turn|_90_|bwd|start|stop|_l_|_r_|_left|_right|look|eat|sniff|lay|sit|death|hit")
+
+
+def gaits(names: list[str]) -> dict[str, str]:
+    """Looping idle, walk, trot and run animations of a skeleton, for creatures a script walks itself."""
+    loops = [n for n in names if not NOT_A_LOOP.search(n.lower())]
+    result = {}
+    for gait, keys in GAITS:
+        for key in keys:
+            hits = [n for n in loops if key in n.lower()]
+            if hits:
+                result[gait] = min(hits, key=len)
+                break
+    return result
+
+
 def resolve_skeleton(game: Path, model: str, files: dict | None = None) -> str:
     """The .chr skeleton for a model path; a .skin is looked up through the game's .cdf files."""
     if model.lower().endswith(".chr") or not model:

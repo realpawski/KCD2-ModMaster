@@ -23,9 +23,8 @@ def clothing_name(mod_id: str, creature: CreatureDefinition) -> str:
 
 
 def custom_look(creature: CreatureDefinition, body: BaseBody) -> bool:
-    """Animals are dressed through one body skin, which a custom model can replace; people are assembled
-    from many clothing parts, so they keep the game look."""
-    return bool(creature.model_path) and not creature.is_human and bool(body.clothing and body.equipment_part)
+    """Bodies are dressed through a clothing config whose body skin a custom model can replace."""
+    return bool(creature.model_path) and bool(body.clothing and body.equipment_part)
 
 
 def look_rows(mod_id: str, creature: CreatureDefinition, body: BaseBody, folder: str, skin: str,
@@ -36,13 +35,18 @@ def look_rows(mod_id: str, creature: CreatureDefinition, body: BaseBody, folder:
     ships these rows merged into full copies of both tables."""
     name = clothing_name(mod_id, creature)
     row = {k: v for k, v in body.clothing.items()
-           if k not in ("Name", "DefaultBody", "DefaultHair", "DefaultBeard", "DefaultHead")}
+           if k not in ("Name", "DefaultBody", "DefaultHair", "DefaultBeard", "DefaultHead", "DefaultClothingPreset")}
     row.update({"Name": name, "DefaultBody": name + "_body"})
+    part = body.equipment_part
+    if creature.is_human:
+        # A person made in Blender is one complete mesh: no game head, hair or default outfit on top.
+        row["HeadIsNeeded"] = "false"
+        part = "torso"
     clothing = "<ClothingConfig " + " ".join(f"{k}={quoteattr(v)}" for k, v in row.items()) + " />"
     component = (f"<Component Name={quoteattr(name)} Race={quoteattr(body.race)} "
                  f"Gender={quoteattr(body.gender or 'NotDefined')} FilePath={quoteattr(folder)}>"
                  f"<DerivedComponents><Body Name={quoteattr(name + '_body')}><Elements>"
-                 f"<SkinElement EquipmentPart={quoteattr(body.equipment_part)} BodyLayerId=\"0\" "
+                 f"<SkinElement EquipmentPart={quoteattr(part)} BodyLayerId=\"0\" "
                  f"Model={quoteattr(skin)} Material={quoteattr(material)} /></Elements></Body></DerivedComponents>"
                  "</Component>")
     return {"name": name, "clothing": clothing, "component": component}
@@ -83,6 +87,9 @@ def soul_row(mod_id: str, creature: CreatureDefinition, body: BaseBody) -> dict[
     brain = attitude(creature.base_class, creature.attitude).brain
     if brain:
         row["brain_id"] = brain
+    if creature.is_human and custom_look(creature, body):
+        # The character name picks a game face and outfit, which would cover the creature's own model.
+        row.pop("skald_character_name", None)
     return row
 
 
@@ -99,7 +106,7 @@ def generate_soul_xml(mod_id: str, creatures: list[CreatureDefinition], bodies: 
     return "\n".join(lines)
 
 
-def registry_entry(mod_id: str, creature: CreatureDefinition, body: BaseBody) -> dict:
+def registry_entry(mod_id: str, creature: CreatureDefinition, body: BaseBody, gaits: dict | None = None) -> dict:
     entry = {"id": "creature:" + creature.creature_id, "name": creature.name,
              "category": "npcs" if creature.is_human else "animals", "spawn_type": "soul",
              "soul_guid": creature.soul_guid, "archetype": body.archetype, "entity_class": body.entity_class,
@@ -107,9 +114,10 @@ def registry_entry(mod_id: str, creature: CreatureDefinition, body: BaseBody) ->
              "status": "packaged_unverified", "source": "compiled_custom"}
     if creature.attitude in ("companion", "ally"):
         entry["follow"] = True
+        if gaits and not creature.is_human:
+            entry["gaits"] = dict(gaits)
     if creature.attitude in ("companion", "ally", "domestic", "neutral"):
         entry["calm"] = True
-    # Loading a model onto a person replaces the body the game assembles from clothing parts and crashes it.
     if custom_look(creature, body):
         entry["model_path"] = creature.model_path
         entry["clothing_config"] = clothing_name(mod_id, creature)
@@ -141,7 +149,8 @@ def validate(creatures: list[CreatureDefinition], bodies: dict[str, BaseBody],
             if value > 30:
                 issues.append((WARNING, c.name, f"{name.title()} {value} is above the game's maximum of 30."))
         if c.model_path and c.is_human:
-            issues.append((WARNING, c.name, "Custom models work for animals; people keep their game look."))
+            issues.append((WARNING, c.name, "The game adds no head, hair or clothes to a person in your own model, "
+                           "so the model must be the whole figure."))
         if c.model_path:
             skeleton = models.get(c.model_path)
             if skeleton is None:

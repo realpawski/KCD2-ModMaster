@@ -78,10 +78,32 @@ def test_registry_entry_carries_model_and_changed_stats_only():
     assert entry["health"] == 250 and entry["stats"] == {"strength": 12}
 
 
-def test_people_never_get_a_model_loaded_over_them():
+def test_a_person_wears_the_whole_model_without_game_head_outfit_or_face():
+    npc = BaseBody(**{**NPC.__dict__, "clothing": {"Name": "female2", "Race": "Human", "Gender": "Female",
+                   "DefaultBody": "female_body", "DefaultHead": "f_head_000", "HeadIsNeeded": "true",
+                   "DefaultClothingPreset": "45db15cb-246a-a3c8-7dc0-f99af7be1399"}, "equipment_part": "legs",
+                   "template": {**NPC.template, "skald_character_name": "char_GENERIC_WOMAN_COMMONER_06"}})
     c = CreatureDefinition("lady", "Lady", "NPC", model_path=MODEL, attitude="ally")
-    entry = generator.registry_entry("m", c, NPC)
-    assert "model_path" not in entry and "clothing_config" not in entry
+    look = generator.look_rows("m", c, npc, "modmaster/m_lady/", "lady.skin", "lady.mtl")
+    assert 'HeadIsNeeded="false"' in look["clothing"] and "DefaultClothingPreset" not in look["clothing"]
+    assert "f_head_000" not in look["clothing"] and 'EquipmentPart="torso"' in look["component"]
+    assert "skald_character_name" not in generator.soul_row("m", c, npc)
+    entry = generator.registry_entry("m", c, npc, {"walk": "walk"})
+    assert entry["clothing_config"] == "m_lady" and "gaits" not in entry
+
+
+def test_friends_get_the_gaits_the_script_walks_them_with():
+    from runtime_tools.animations import gaits
+
+    names = ["relaxed_idle_new", "relaxed_idle_to_walk_new", "relaxed_walk_new", "relaxed_walk_90_l_new",
+             "relaxed_trot_new", "combat_trot", "relaxed_gallop_new", "relaxed_gallop_to_idle_new"]
+    found = gaits(names)
+    assert found == {"idle": "relaxed_idle_new", "walk": "relaxed_walk_new", "trot": "relaxed_trot_new",
+                     "run": "relaxed_gallop_new"}
+    friend = CreatureDefinition("b", "Friendly Boar", "Boar", attitude="companion")
+    assert generator.registry_entry("m", friend, BOAR, found)["gaits"] == found
+    wild = CreatureDefinition("w", "Wild Boar", "Boar")
+    assert "gaits" not in generator.registry_entry("m", wild, BOAR, found)
 
 
 def test_friends_of_henry_think_like_his_dog():
@@ -245,7 +267,6 @@ def test_custom_look_dresses_the_body_through_its_own_clothing_config():
     assert [c.get("Name") for c in ET.fromstring(clothing).iter("ClothingConfig")] == ["boar", "m_rain"]
     assert [c.get("Name") for c in ET.fromstring(components).iter("Component")] == ["Boar", "m_rain"]
     assert generator.registry_entry("m", c, BOAR_DRESSED)["clothing_config"] == "m_rain"
-    assert not generator.custom_look(CreatureDefinition("guy", "Guy", "NPC", model_path=MODEL), BOAR_DRESSED)
     with pytest.raises(ValueError):
         generator.merge_looks(GAME_CLOTHING, GAME_COMPONENTS, [{**look, "component": "<Soul/>"}])
 

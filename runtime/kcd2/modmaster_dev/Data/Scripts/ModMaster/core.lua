@@ -1,6 +1,6 @@
 ModMasterDev = {version="0.7.0", registryVersion=1, opened=false, assets={},
     spawns={}, selected=1, spawnSelected=1, tab="ASSETS", search="", category="", modFilter="",
-    serial=0, timer=nil, message="Runtime loaded; in-game acceptance pending", locations={},
+    serial=0, walkers={}, timer=nil, message="Runtime loaded; in-game acceptance pending", locations={},
     settings={hotkey="f5",keyCode=116,noclipHotkey="f4",hudEnabled=true,freecamSpeed=5.0,fastMult=4.0,slowMult=0.25}}
 
 function ModMasterDev:Log(text)
@@ -107,6 +107,15 @@ function ModMasterDev:ValidCreatureValues(asset)
     if asset.health ~= nil and (type(asset.health) ~= "number" or asset.health < 1 or asset.health > 10000) then return false end
     if asset.follow ~= nil and type(asset.follow) ~= "boolean" then return false end
     if asset.calm ~= nil and type(asset.calm) ~= "boolean" then return false end
+    if asset.gaits ~= nil then
+        if type(asset.gaits) ~= "table" then return false end
+        for gait, anim in pairs(asset.gaits) do
+            if (gait ~= "idle" and gait ~= "walk" and gait ~= "trot" and gait ~= "run") or type(anim) ~= "string"
+                or not anim:match("^[%w_]+$") then
+                return false
+            end
+        end
+    end
     if asset.stats == nil then return true end
     if type(asset.stats) ~= "table" then return false end
     for name, level in pairs(asset.stats) do

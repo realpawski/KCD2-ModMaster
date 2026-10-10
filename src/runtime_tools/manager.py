@@ -521,8 +521,19 @@ class RuntimeManager:
                 extra[f"Objects/Characters/{folder}{name}"] = data
             looks.append(generator.look_rows(project.id, c, body, folder, skin, material))
         self._looks = looks
-        entries = [generator.registry_entry(project.id, c, bodies[c.base_class]) for c in creatures]
+        entries = [generator.registry_entry(project.id, c, bodies[c.base_class], self._gaits(bodies[c.base_class].skeleton))
+                   for c in creatures]
         return creatures, entries, extra
+
+    def _gaits(self, skeleton: str) -> dict[str, str]:
+        from runtime_tools.animations import animation_names, gaits
+        if not skeleton:
+            return {}
+        try:
+            return gaits(animation_names(self.game, skeleton))
+        except (OSError, ValueError) as exc:
+            log.warning("Animations of %s unavailable: %s", skeleton, exc)
+            return {}
 
     def _creature_skin(self, model_path: str) -> tuple[str, str, dict[str, bytes]]:
         """The skin and material a compiled .cdf binds, as (skin name, material name, files)."""
