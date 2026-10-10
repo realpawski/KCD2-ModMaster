@@ -6,6 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Console tools (converter, headless Blender) otherwise flash a command window over the app on every call.
+NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
 
 def human_size(n: int | None) -> str:
     if n is None:

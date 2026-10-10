@@ -24,6 +24,7 @@ from preview.cache import (
 )
 from preview.gltf_loader import MeshGeometry, load_glb
 from preview.lods import find_lod_family
+from utils.helpers import NO_WINDOW
 from materials.dds_combiner import combine_cryengine_dds
 from materials.mtl_parser import parse_mtl_xml
 
@@ -389,6 +390,7 @@ def prepare_3d_preview(
                 text=False,
                 cwd=str(staging_dir),
                 timeout=120,
+                creationflags=NO_WINDOW,
             )
             stdout_str = proc.stdout.decode("utf-8", errors="replace") if proc.stdout else ""
             stderr_str = proc.stderr.decode("utf-8", errors="replace") if proc.stderr else ""

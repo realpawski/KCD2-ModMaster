@@ -31,6 +31,7 @@ from core.config import Settings
 from core.tasks import UserFacingError
 from database.index import AssetIndex, AssetRow
 from materials.mtl_parser import parse_mtl_xml, resolve_and_stage_textures
+from utils.helpers import NO_WINDOW
 from preview.converter import (
     combine_cryengine_dds,
     converter_missing_message,
@@ -270,7 +271,7 @@ class BlenderBridgeManager:
             )
         ]
         try:
-            subprocess.run(cmd, capture_output=True, timeout=10)
+            subprocess.run(cmd, capture_output=True, timeout=10, creationflags=NO_WINDOW)
         except Exception as e:
             log.debug("Auto-enable headless notice: %s", e)
 
@@ -582,7 +583,8 @@ class BlenderBridgeManager:
                 "-embedtextures",
             ])
 
-        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(target_cgf.parent), timeout=60)
+        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(target_cgf.parent), timeout=60,
+                              creationflags=NO_WINDOW)
         expected_glb = target_cgf.with_suffix(".glb")
         if not expected_glb.is_file():
             glbs = list(target_cgf.parent.glob("*.glb"))
@@ -713,7 +715,8 @@ class BlenderBridgeManager:
                 cmd = [str(conv_exe), str(skin_file), "-glb", "-objectdir", str(textures_dir)]
                 if mtl_file:
                     cmd += ["-material", str(mtl_file), "-embedtextures"]
-                proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(skin_file.parent), timeout=120)
+                proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(skin_file.parent), timeout=120,
+                                      creationflags=NO_WINDOW)
                 produced = skin_file.with_suffix(".glb")
                 if not produced.is_file():
                     raise UserFacingError(f"Converter failed for {skin_row.filename}: {proc.stdout[-500:]}")
