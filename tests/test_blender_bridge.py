@@ -174,3 +174,25 @@ def test_the_converter_shipped_with_modmaster_comes_first(tmp_path, monkeypatch)
     monkeypatch.setattr(app.paths, "resource_dir", lambda relative: tmp_path / "install" / relative)
     monkeypatch.setenv("APPDATA", str(tmp_path))
     assert find_converter_exe() == shipped
+
+
+def test_a_command_reaches_only_the_newest_blender_window():
+    from blender.bridge_manager import BlenderBridgeManager
+
+    class Window:
+        def __init__(self, broken=False):
+            self.received, self.broken = [], broken
+
+        def sendall(self, data):
+            if self.broken:
+                raise OSError("closed")
+            self.received.append(data)
+
+    bridge = BlenderBridgeManager.__new__(BlenderBridgeManager)
+    import threading
+    bridge._clients_lock = threading.Lock()
+    first, second, closed = Window(), Window(), Window(broken=True)
+    bridge._clients = [first, second, closed]
+    assert bridge.send_command({"command": "import_asset"})
+    assert second.received and not first.received  # the closed newest one is skipped and dropped
+    assert bridge._clients == [first, second]

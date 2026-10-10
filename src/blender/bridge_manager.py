@@ -436,21 +436,19 @@ class BlenderBridgeManager:
         return self._is_connected
 
     def send_command(self, payload: dict[str, Any]) -> bool:
-        """Sends a command to all connected Blender clients."""
+        """Sends a command to the most recently opened Blender only.
+
+        Every open Blender window connects on its own; sending to all of them imported the asset into each.
+        """
         data = (json.dumps(payload) + "\n").encode("utf-8")
-        sent = False
         with self._clients_lock:
-            dead_clients = []
-            for c in self._clients:
+            for c in reversed(list(self._clients)):
                 try:
                     c.sendall(data)
-                    sent = True
+                    return True
                 except Exception:
-                    dead_clients.append(c)
-            for d in dead_clients:
-                self._clients.remove(d)
-
-        return sent
+                    self._clients.remove(c)
+        return False
 
     # Editable Workspace Concept & Staging
     def get_asset_slug(self, row: AssetRow) -> str:
