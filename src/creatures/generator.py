@@ -23,8 +23,9 @@ def clothing_name(mod_id: str, creature: CreatureDefinition) -> str:
 
 
 def custom_look(creature: CreatureDefinition, body: BaseBody) -> bool:
-    """Bodies are dressed through a clothing config whose body skin a custom model can replace."""
-    return bool(creature.model_path) and bool(body.clothing and body.equipment_part)
+    """Animals are dressed through a clothing config whose body skin a custom model can replace. People
+    ignore such a config, and loading the model over them froze and crashed the game, so they keep the game look."""
+    return bool(creature.model_path) and not creature.is_human and bool(body.clothing and body.equipment_part)
 
 
 def look_rows(mod_id: str, creature: CreatureDefinition, body: BaseBody, folder: str, skin: str,
@@ -149,8 +150,7 @@ def validate(creatures: list[CreatureDefinition], bodies: dict[str, BaseBody],
             if value > 30:
                 issues.append((WARNING, c.name, f"{name.title()} {value} is above the game's maximum of 30."))
         if c.model_path and c.is_human:
-            issues.append((WARNING, c.name, "The game adds no head, hair or clothes to a person in your own model, "
-                           "so the model must be the whole figure."))
+            issues.append((WARNING, c.name, "People keep the game look for now; your own model works on animals."))
         if c.model_path:
             skeleton = models.get(c.model_path)
             if skeleton is None:

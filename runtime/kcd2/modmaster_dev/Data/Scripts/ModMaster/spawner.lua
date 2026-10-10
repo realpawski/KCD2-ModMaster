@@ -218,18 +218,45 @@ function ModMasterDev:IsDead(entity)
     return ok and type(hp)=="number" and hp<=0
 end
 
+-- Static world, terrain and loose objects; creatures and Henry are walked around, not stood on.
+function ModMasterDev:Ray(from,dir,skip)
+    local phys=rawget(_G,"Physics")
+    if type(phys)~="table" or not phys.RayWorldIntersection then return nil end
+    local solid=(ent_static or 1)+(ent_sleeping_rigid or 2)+(ent_rigid or 4)+(ent_terrain or 256)
+    local hits={{}}
+    local ok,count=pcall(phys.RayWorldIntersection,from,dir,1,solid,skip,nil,hits)
+    if ok and type(count)=="number" and count>0 and type(hits[1].pos)=="table" then return hits[1] end
+end
+
+-- Searched from knee height down, so a roof or branch above is never taken for the ground. Nothing within
+-- a step below means a drop the creature does not walk into.
+ModMasterStepHeight=0.6
+
 function ModMasterDev:GroundZ(x,y,fromZ,skip)
     local phys=rawget(_G,"Physics")
-    if type(phys)=="table" and phys.RayWorldIntersection then
-        local ok,hits=pcall(phys.RayWorldIntersection,{x=x,y=y,z=fromZ+1.5},{x=0,y=0,z=-6},1,ent_all or 287,skip)
-        local hit=ok and type(hits)=="table" and hits[1]
-        if hit and hit.pos then return hit.pos.z end
-    end
+    if type(phys)~="table" or not phys.RayWorldIntersection then return fromZ end
+    local hit=self:Ray({x=x,y=y,z=fromZ+ModMasterStepHeight},{x=0,y=0,z=-3*ModMasterStepHeight},skip)
+    if hit then return hit.pos.z end
     if System.GetTerrainElevation then
         local ok,z=pcall(System.GetTerrainElevation,{x=x,y=y,z=fromZ})
-        if ok and type(z)=="number" then return z end
+        if ok and type(z)=="number" and math.abs(z-fromZ)<=2*ModMasterStepHeight then return z end
     end
-    return fromZ
+end
+
+-- Straight on first, then ever wider turns to either side around a fence, wall or tree.
+ModMasterDetours={0,0.5,-0.5,1.0,-1.0,1.6,-1.6}
+
+function ModMasterDev:NextStep(b,ux,uy,step,skip)
+    for _,turn in ipairs(ModMasterDetours) do
+        local c,s=math.cos(turn),math.sin(turn)
+        local vx,vy=ux*c-uy*s,ux*s+uy*c
+        local reach=step+0.6
+        if not self:Ray({x=b.x,y=b.y,z=b.z+ModMasterStepHeight},{x=vx*reach,y=vy*reach,z=0},skip) then
+            local x,y=b.x+vx*step,b.y+vy*step
+            local z=self:GroundZ(x,y,b.z,skip)
+            if z then return x,y,z,vx,vy end
+        end
+    end
 end
 
 function ModMasterDev:GaitsFor(asset,class)
@@ -321,14 +348,27 @@ function ModMasterDev:WalkTick(entity,asset)
                 self:Halt(entity,state)
                 state.restUntil=now+5+math.random()*10
             else
+                if not state.moving then state.check={x=b.x,y=b.y,at=now} end
                 state.moving=true
                 local anim,speed=self:Gait(state.gaits,dist,state.follow)
                 if anim~=state.anim then state.anim=anim;self:PlayLoop(entity,asset,anim) end
                 local step=math.min(speed*dt,dist-stopAt)
-                local x,y=b.x+dx/dist*step,b.y+dy/dist*step
-                pcall(entity.SetWorldPos,entity,{x=x,y=y,z=self:GroundZ(x,y,b.z,entity.id)})
-                pcall(entity.SetWorldAngles,entity,{x=0,y=0,z=math.atan2(-dx,dy)})
-                state.expect={x=x,y=y}
+                local x,y,z,ux,uy=self:NextStep(b,dx/dist,dy/dist,step,entity.id)
+                if x then
+                    pcall(entity.SetWorldPos,entity,{x=x,y=y,z=z})
+                    pcall(entity.SetWorldAngles,entity,{x=0,y=0,z=math.atan2(-ux,uy)})
+                    state.expect={x=x,y=y}
+                end
+                -- Boxed in, or pushed back by something the rays missed: try elsewhere instead of treading on the spot.
+                if now-state.check.at>=3 then
+                    local mx,my=b.x-state.check.x,b.y-state.check.y
+                    if mx*mx+my*my<0.25 then
+                        self:Halt(entity,state)
+                        state.pauseUntil=now+2;state.restUntil=now+2
+                    else
+                        state.check={x=b.x,y=b.y,at=now}
+                    end
+                end
             end
         end
     end
@@ -358,8 +398,9 @@ function ModMasterDev:SpawnSoul(asset,pos)
     if not guid then return self:Log("No " .. tostring(asset.archetype) .. " souls in the registry") end
     local class=asset.entity_class or (asset.category=="npcs" and "NPC" or asset.archetype)
     local model=type(asset.model_path)=="string" and asset.model_path~="" and asset.model_path or nil
-    -- A person's entity must start from the game skeleton file; the model is loaded over it afterwards.
-    local bodyModel=asset.category~="npcs" and model or nil
+    -- Loading a model over a person froze and crashed the game; people keep the look the game gives them.
+    if asset.category=="npcs" then model=nil end
+    local bodyModel=model
     local clothing=type(asset.clothing_config)=="string" and asset.clothing_config:match("^[%w_]+$") and asset.clothing_config or nil
     self.serial=self.serial+1
     local name="ModMasterSoul_" .. self.serial

@@ -78,18 +78,11 @@ def test_registry_entry_carries_model_and_changed_stats_only():
     assert entry["health"] == 250 and entry["stats"] == {"strength": 12}
 
 
-def test_a_person_wears_the_whole_model_without_game_head_outfit_or_face():
-    npc = BaseBody(**{**NPC.__dict__, "clothing": {"Name": "female2", "Race": "Human", "Gender": "Female",
-                   "DefaultBody": "female_body", "DefaultHead": "f_head_000", "HeadIsNeeded": "true",
-                   "DefaultClothingPreset": "45db15cb-246a-a3c8-7dc0-f99af7be1399"}, "equipment_part": "legs",
-                   "template": {**NPC.template, "skald_character_name": "char_GENERIC_WOMAN_COMMONER_06"}})
+def test_people_keep_the_game_look_because_a_model_over_them_crashed_the_game():
     c = CreatureDefinition("lady", "Lady", "NPC", model_path=MODEL, attitude="ally")
-    look = generator.look_rows("m", c, npc, "modmaster/m_lady/", "lady.skin", "lady.mtl")
-    assert 'HeadIsNeeded="false"' in look["clothing"] and "DefaultClothingPreset" not in look["clothing"]
-    assert "f_head_000" not in look["clothing"] and 'EquipmentPart="torso"' in look["component"]
-    assert "skald_character_name" not in generator.soul_row("m", c, npc)
+    npc = BaseBody(**{**NPC.__dict__, "clothing": {"Name": "female2", "Race": "Human"}, "equipment_part": "torso"})
     entry = generator.registry_entry("m", c, npc, {"walk": "walk"})
-    assert entry["clothing_config"] == "m_lady" and "gaits" not in entry
+    assert "model_path" not in entry and "clothing_config" not in entry and "gaits" not in entry
 
 
 def test_friends_get_the_gaits_the_script_walks_them_with():

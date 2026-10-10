@@ -579,3 +579,20 @@ def test_esp_labels_nearby_creatures_with_distance_and_keeps_an_overlay():
  event(lua,'esp_range:abc');event(lua,'esp_range:99999');assert lua.eval('ModMasterDev.espRange')==250
  event(lua,'close');assert lua.eval('visible')  # overlay stays for the labels
  lua.execute('ModMasterDev:ToggleEsp()');assert lua.eval('not visible')
+
+
+def test_walking_creatures_keep_to_the_ground_and_go_around_walls():
+ lua=runtime()
+ lua.execute(CREATURE+'''
+  -- A wall north of the creature, ground at z=2 everywhere; rays fill the hit table like the game does.
+  Physics={RayWorldIntersection=function(from,dir,max,types,skip,skip2,hits)
+    if dir.z<0 then hits[1].pos={x=from.x,y=from.y,z=2};return 1 end
+    if math.abs(dir.x)<0.3*math.sqrt(dir.x^2+dir.y^2) and dir.y>0 then hits[1].pos={x=from.x,y=from.y+0.5,z=from.z};return 1 end
+    return 0 end}
+  palPos={x=0,y=-20,z=2}
+  pet={name="Pal",follow=true}
+  ModMasterDev:StartLife(pal,pet,"Boar",palPos)
+  fakeTime=0.1;ModMasterDev:WalkTick(pal,pet)
+ ''')
+ assert lua.eval('placed.z')==2  # stands on what the ray found below knee height
+ assert abs(lua.eval('placed.x'))>1e-3 and lua.eval('placed.y')>-20  # turned aside, still gaining on Henry
