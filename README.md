@@ -10,7 +10,7 @@ Browse the game's files, create and balance items, and install mods without touc
 [![Qt](https://img.shields.io/badge/UI-PySide6%20%2F%20Qt%206-41CD52?logo=qt&logoColor=white)](https://doc.qt.io/qtforpython-6/)
 [![Lua](https://img.shields.io/badge/in--game-Lua%20%2B%20Scaleform-2C2D72?logo=lua&logoColor=white)](#in-game-menu)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?logo=windows&logoColor=white)](#requirements)
-[![Status](https://img.shields.io/badge/status-1.0-6aa76a)](#status)
+[![Status](https://img.shields.io/badge/status-1.1-6aa76a)](#status)
 [![License](https://img.shields.io/github/license/realpawski/KCD2-ModMaster?color=6aa7e6)](LICENSE)
 
 </div>
@@ -25,21 +25,23 @@ Browse the game's files, create and balance items, and install mods without touc
 
 **Asset browser.** Search all archives of the game, inspect models in a 3D viewport, and view textures, materials and tables. Archives are read in place and never modified.
 
-**Blender bridge.** Open game models in Blender, static or rigged with their skeleton, with materials rebuilt. *Export to KCD2* compiles your scene into a game-ready static `.cgf` or a rigged `.skin` that keeps the game's animations. Loose parts such as a hat follow the nearest bone. Add the result to a mod and it shows up in the in-game spawn menu, as the model of a new item or as the look of a creature.
+**Blender bridge.** Open game models in Blender, static or rigged with their skeleton, with materials rebuilt. *Export to KCD2* compiles your scene into a game-ready static `.cgf` or a rigged `.skin` that keeps the game's animations. Loose parts such as a hat follow the nearest bone. Weapon grip and scabbard points come from the base weapon and can be moved with empties named `slt_0`, `slt_1` or `pck_ir_0` in Blender. One click sends a model to Adobe Substance 3D Painter and brings the painted textures back. Add the result to a mod and it shows up in the in-game spawn menu, as the model of a new item or as the look of a creature.
 
-**Creatures.** Make your own NPCs and animals: pick a game body that fits your model's skeleton, its behaviour toward Henry (wild, indifferent, domestic, hostile or friendly), fighting skill, toughness and stats. Your rigged model replaces the body's look while the game's own AI and animations drive it.
+**Creatures.** Make your own NPCs and animals: pick a game body that fits your model's skeleton, its behaviour toward Henry (wild, indifferent, domestic, hostile or friendly), fighting skill, toughness and stats. Your rigged model replaces an animal's look while the game's own AI and animations drive it; a friend of Henry thinks like his dog. People keep the game look.
+
+**Items with your look.** Give an item your own model and a 64×64 inventory icon, then add it to Henry's inventory from the in-game menu. Mod versions go up on their own when a build changes.
 
 **Workspace status.** Every workspace asset shows what it still needs before it works in the game, with a button for each fix.
 
-**In-game menu.** An optional companion mod adds a menu to the game for spawning props, items, your creatures and every NPC and animal of the game with their own AI. It also brings freecam, noclip, god mode, an entity ESP with names and distances, and an unlimited photo mode range for testing your work.
+**In-game menu.** An optional companion mod adds a menu to the game for spawning props, items, your creatures and every NPC and animal of the game with their own AI. It also brings freecam, noclip, god mode, an entity ESP with names, distances and health bars, a Test Area platform in the sky, and an unlimited photo mode range for testing your work.
 
 ## Requirements
 
 - Windows 10 or 11, 64-bit
 - Kingdom Come: Deliverance II (Steam)
 - Optional: [Blender](https://www.blender.org/) 4.2 or newer for the Blender bridge
-- Optional: KCD2 Blender Toolkit by Lune (installed as a Blender add-on) for 3D previews and opening game models in Blender; it brings KCD2-Convertor.exe
 - Optional: KCD2 Modding Tools (free on Steam) to compile your own models
+- Optional: Adobe Substance 3D Painter for painting textures
 
 ## Installation
 
@@ -111,13 +113,13 @@ tests/
 
 ## Status
 
-Version 1.0 covers the item editor, creatures, the Blender pipeline for static and rigged models, mod builds, the installer and in-place updates that keep your settings. Some in-game features still need wider testing across game versions. Please report problems on the [issue tracker](https://github.com/realpawski/KCD2-ModMaster/issues) and include the log from **Settings > About > Open log folder**.
+Version 1.1 covers the item editor, creatures, the Blender pipeline for static and rigged models, mod builds, the installer and in-place updates that keep your settings. Some in-game features still need wider testing across game versions. Please report problems on the [issue tracker](https://github.com/realpawski/KCD2-ModMaster/issues) and include the log from **Settings > About > Open log folder**.
 
 Back up your saves before testing modified items. Removing a mod that added items to a save can leave missing items behind.
 
 ## License
 
-[MIT](LICENSE). The in-game menu embeds glyphs from [Inter](https://rsms.me/inter/) under the SIL Open Font License 1.1, see [third-party notices](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE). The in-game menu embeds glyphs from [Inter](https://rsms.me/inter/) under the SIL Open Font License 1.1, and ships [Cryengine Converter](https://github.com/Markemp/Cryengine-Converter) (GPL-2.0) as a separate program for model conversion, see [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Disclaimer
 

@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_IPC_HOST = "127.0.0.1"
 DEFAULT_IPC_PORT = 24952
-CURRENT_BRIDGE_VERSION = "1.4.0"
+CURRENT_BRIDGE_VERSION = "1.5.0"
 ADDON_NAME = "KCD2_ModMaster_Bridge"
 
 

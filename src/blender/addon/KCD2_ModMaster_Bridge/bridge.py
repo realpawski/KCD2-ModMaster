@@ -16,7 +16,7 @@ log = logging.getLogger("KCD2_ModMaster_Bridge.bridge")
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 24952
-BRIDGE_VERSION = "1.4.0"
+BRIDGE_VERSION = "1.5.0"
 
 # Main-thread command queue for Blender operators
 _incoming_command_queue: queue.Queue[dict[str, Any]] = queue.Queue()
