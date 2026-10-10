@@ -10,6 +10,8 @@ datas = [
     (str(ROOT / "runtime/kcd2/modmaster_dev/version.json"), "runtime/kcd2/modmaster_dev"),
     (str(SRC / "blender/addon"), "blender/addon"),
     (str(SRC / "ui/assets"), "ui/assets"),
+    # cgf-converter (GPL-2.0, separate program) turns game models into files Blender and the preview read.
+    (str(ROOT / "third_party/cgf-converter"), "third_party/cgf-converter"),
 ]
 
 a = Analysis(

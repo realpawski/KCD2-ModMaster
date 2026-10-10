@@ -20,3 +20,6 @@ tools/runtime_cli.py
 tests/blender_material_acceptance.py
 /test_*.py
 rc_dependency.txt
+
+# Third-party binaries, shipped in the installer, not in git
+third_party/**/*.exe

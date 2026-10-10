@@ -150,6 +150,9 @@ print('TEST_ROUNDTRIP_SUCCESS')
 def test_converter_is_found_in_nested_addon_and_extension_folders(tmp_path, monkeypatch):
     from preview.converter import find_converter_exe
 
+    import app.paths
+
+    monkeypatch.setattr(app.paths, "resource_dir", lambda relative: tmp_path / "install" / relative)
     monkeypatch.setenv("APPDATA", str(tmp_path))
     blender = tmp_path / "Blender Foundation" / "Blender"
     assert find_converter_exe() is None
@@ -159,3 +162,15 @@ def test_converter_is_found_in_nested_addon_and_extension_folders(tmp_path, monk
         (blender / place).parent.mkdir(parents=True)
         (blender / place).write_bytes(b"MZ")
     assert find_converter_exe() == blender / "5.2/scripts/addons/KCD2-Blender-Toolkit-0.3.2" / tool
+
+
+def test_the_converter_shipped_with_modmaster_comes_first(tmp_path, monkeypatch):
+    import app.paths
+    from preview.converter import BUNDLED_CONVERTER, find_converter_exe
+
+    shipped = tmp_path / "install" / BUNDLED_CONVERTER
+    shipped.parent.mkdir(parents=True)
+    shipped.write_bytes(b"MZ")
+    monkeypatch.setattr(app.paths, "resource_dir", lambda relative: tmp_path / "install" / relative)
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert find_converter_exe() == shipped

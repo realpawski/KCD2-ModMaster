@@ -30,10 +30,10 @@ from materials.mtl_parser import parse_mtl_xml
 log = logging.getLogger(__name__)
 
 
+BUNDLED_CONVERTER = "third_party/cgf-converter/KCD2-Convertor.exe"
 CONVERTER_MISSING = (
-    "KCD2-Convertor.exe not found. It comes with the KCD2 Blender Toolkit add-on by Lune: install it in "
-    "Blender (Edit > Preferences > Add-ons > Install from Disk), then try again. "
-    "Alternatively copy KCD2-Convertor.exe into {tools}."
+    "KCD2-Convertor.exe not found. ModMaster ships it in its install folder; reinstall ModMaster, or copy "
+    "KCD2-Convertor.exe (cgf-converter) into {tools}."
 )
 
 
@@ -55,11 +55,16 @@ def _blender_roots(settings: Settings | None) -> list[Path]:
 
 
 def find_converter_exe(settings: Settings | None = None) -> Path | None:
-    """KCD2-Convertor.exe from the KCD2 Blender Toolkit, wherever Blender keeps the add-on, or the workspace."""
+    """KCD2-Convertor.exe: the workspace override, the copy shipped with ModMaster, else a KCD2 Blender Toolkit."""
+    from app.paths import resource_dir
+
     if settings:
         own = settings.workspace / "tools" / "KCD2-Convertor.exe"
         if own.is_file():
             return own
+    bundled = resource_dir(BUNDLED_CONVERTER)
+    if bundled.is_file():
+        return bundled
     # Add-ons sit under scripts/addons; Blender 4.2+ extensions under extensions/<repo>; a zip
     # installed from GitHub adds one more folder level (KCD2-Blender-Toolkit-0.3.2/io_KCD2_Blender_Toolkit).
     patterns = ("*/scripts/addons/*/External/KCD2-Convertor/KCD2-Convertor.exe",

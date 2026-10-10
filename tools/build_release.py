@@ -77,6 +77,10 @@ def main() -> int:
     parser.add_argument("--no-installer", action="store_true")
     args = parser.parse_args()
 
+    converter = ROOT / "third_party/cgf-converter/KCD2-Convertor.exe"
+    if not converter.is_file():
+        print(f"{converter} is missing; see third_party/cgf-converter/README.md")
+        return 1
     write_version_info()
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
          "--distpath", str(DIST), "--workpath", str(BUILD / "pyinstaller"), "packaging/modmaster.spec"])
