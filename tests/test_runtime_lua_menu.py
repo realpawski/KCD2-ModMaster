@@ -481,27 +481,56 @@ def test_test_area_without_collision_returns_henry_at_once():
  assert lua.eval('ModMasterDev.testArea')is None and abs(lua.eval('worldPos.z')-10.2)<1e-9
 
 
+CREATURE = '''
+  worldPos={x=0,y=0,z=0};anims={};stopped=0;placed=nil
+  pal={id=3,soul={},GetWorldPos=function() return palPos end,SetWorldAngles=function(self,a) facing=a end,
+       SetWorldPos=function(self,p) placed=p;palPos=p end,StopAnimation=function() stopped=stopped+1 end,
+       StartAnimation=function(self,slot,name,layer,blend,speed,loop) table.insert(anims,name);animLayer=layer;return true end}
+  System.GetEntity=function(id) return pal end
+  ModMasterGaits={Boar={idle="stand",walk="walk",trot="trot",run="gallop"}}
+  function jump(p) local s=ModMasterDev.walkers[3];palPos=p;s.expect=nil;s.seen=nil end
+'''
+
+
 def test_friends_walk_after_henry_with_their_own_gaits_and_are_only_set_down_when_lost():
  lua=runtime()
- lua.execute('''
-  worldPos={x=0,y=0,z=0};anims={};placed=nil
-  pal={id=3,soul={},GetWorldPos=function() return palPos end,SetWorldAngles=function(self,a) facing=a end,
-       SetWorldPos=function(self,p) placed=p;palPos=p end,
-       StartAnimation=function(self,slot,name,layer,blend,speed,loop) table.insert(anims,name);return true end}
+ lua.execute(CREATURE+'''
   palPos={x=0,y=-20,z=0}
-  System.GetEntity=function(id) return pal end
-  pet={name="Pal",gaits={idle="stand",walk="walk",trot="trot",run="gallop"}}
+  pet={name="Pal",follow=true}
+  ModMasterDev:StartLife(pal,pet,"Boar",palPos)
   ModMasterDev:FollowTick(pal,pet,2)
   fakeTime=0.1;ModMasterDev:WalkTick(pal,pet)
  ''')
- assert lua.eval('anims[#anims]')=="gallop"  # far behind: gallops
+ assert lua.eval('anims[#anims]')=="gallop" and lua.eval('animLayer')==8  # far behind: gallops on its own layer
  assert abs(lua.eval('placed.y')+19.4)<1e-9 and abs(lua.eval('placed.x'))<1e-9  # 6 m/s for 0.1 s toward Henry
- lua.execute('palPos={x=0,y=-6,z=0};fakeTime=0.2;ModMasterDev:WalkTick(pal,pet)')
+ lua.execute('jump({x=0,y=-6,z=0});fakeTime=0.2;ModMasterDev:WalkTick(pal,pet)')
  assert lua.eval('anims[#anims]')=="walk"
- lua.execute('palPos={x=0,y=-2,z=0};fakeTime=0.3;ModMasterDev:WalkTick(pal,pet)')
- assert lua.eval('anims[#anims]')=="stand"  # close enough: stands
+ lua.execute('jump({x=0,y=-2,z=0});fakeTime=0.3;ModMasterDev:WalkTick(pal,pet)')
+ assert lua.eval('stopped')==1  # close enough: hands the body back to its brain
  lua.execute('placed=nil;palPos={x=0,y=-80,z=0};ModMasterDev:FollowTick(pal,pet,3)')
  assert abs(lua.eval('placed.y')+4)<1e-9  # lost and out of view: set down behind Henry
+
+
+def test_spawned_animals_roam_around_their_spawn_and_give_way_to_their_brain():
+ lua=runtime()
+ lua.execute(CREATURE+'''
+  palPos={x=50,y=50,z=0}
+  cow={name="Cow"}
+  ModMasterDev:StartLife(pal,cow,"Boar",palPos)
+  state=ModMasterDev.walkers[3]
+  fakeTime=9;ModMasterDev:WalkTick(pal,cow)
+ ''')
+ assert lua.eval('anims[#anims]')=="walk" and lua.eval('state.goal~=nil')  # rested, now walks somewhere near
+ lua.execute('''
+  goal=state.goal
+  local d=math.sqrt((goal.x-50)^2+(goal.y-50)^2)
+  near=d>=4 and d<=12
+  palPos={x=palPos.x+3,y=palPos.y,z=0}  -- the brain bolts with it
+  fakeTime=9.03;ModMasterDev:WalkTick(pal,cow)
+ ''')
+ assert lua.eval('near') and lua.eval('stopped')==1 and lua.eval('state.moving')==False
+ lua.execute('n=#anims;fakeTime=12;ModMasterDev:WalkTick(pal,cow)')
+ assert lua.eval('#anims')==lua.eval('n')  # waits while the brain leads
 
 
 def test_unloaded_classes_spawn_with_their_default_soul():

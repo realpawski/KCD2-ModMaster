@@ -15,9 +15,11 @@ from types import SimpleNamespace
 
 from app.paths import resource_dir
 from runtime_tools import REGISTRY_VERSION, RUNTIME_ID, RUNTIME_VERSION, game_catalog
-from runtime_tools.packaging import hashes, mod_id, pack_data, read_spawn_descriptors, registry_lua, write_manifest
+from runtime_tools.packaging import (GAITS_SCRIPT, gaits_lua, hashes, mod_id, pack_data, read_spawn_descriptors,
+                                     registry_lua, write_manifest)
 
 MARKER = ".modmaster-install.json"
+GAITS_CACHE_VERSION = 1
 OWNER = "KCD2 ModMaster"
 log = logging.getLogger(__name__)
 
@@ -227,6 +229,42 @@ class RuntimeManager:
                 continue  # Unrelated mods are never imported into the owned registry.
         return registry
 
+    def creature_gaits(self) -> dict[str, dict[str, str]]:
+        """Entity class -> looping idle/walk/trot/run animations of every animal body of the game."""
+        from runtime_tools.animations import _game_files, animation_names, gaits
+
+        cache = self.workspace / "cache" / "creature_gaits.json"
+        try:
+            bodies = self.creature_bodies()
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+            log.warning("Creature bodies unavailable: %s", exc)
+            return {}
+        try:
+            cached = json.loads(cache.read_text(encoding="utf-8"))
+            if cached.get("version") == GAITS_CACHE_VERSION and set(cached["gaits"]) >= {
+                    c for c, b in bodies.items() if b.skeleton and b.race != "Human"}:
+                return cached["gaits"]
+        except (OSError, ValueError, KeyError, AttributeError):
+            pass
+        files = _game_files(self.game)
+        by_skeleton, result = {}, {}
+        for entity_class, body in sorted(bodies.items()):
+            if not body.skeleton or body.race == "Human":
+                continue
+            if body.skeleton not in by_skeleton:
+                try:
+                    by_skeleton[body.skeleton] = gaits(animation_names(self.game, body.skeleton, files))
+                except (OSError, ValueError) as exc:
+                    log.warning("Animations of %s unavailable: %s", body.skeleton, exc)
+                    by_skeleton[body.skeleton] = {}
+            result[entity_class] = by_skeleton[body.skeleton]
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps({"version": GAITS_CACHE_VERSION, "gaits": result}, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+        return result
+
     def _character_tables(self, looks: list[dict]) -> dict[str, bytes]:
         """Full character tables with every creature look from installed mods, or nothing without looks."""
         from creatures.generator import CLOTHING_TABLE, COMPONENT_TABLE, merge_looks
@@ -261,7 +299,8 @@ class RuntimeManager:
                                       version=RUNTIME_VERSION, description="Spawn menu, freecam, noclip and god mode for KCD2 ModMaster.")
             write_manifest(built / "mod.manifest", project)
             looks = [look for mod in registry["mods"] for look in mod.pop("looks", None) or []]
-            extra = {"Scripts/ModMaster/registry.lua": registry_lua(registry)}
+            extra = {"Scripts/ModMaster/registry.lua": registry_lua(registry),
+                     GAITS_SCRIPT: gaits_lua(self.creature_gaits())}
             extra.update(self._character_tables(looks))
             pack_data(self.source / "Data", built / "Data/modmaster_dev.pak", extra)
             (built / "modmaster_registry.json").write_text(json.dumps(registry, indent=2), encoding="utf-8")

@@ -6,7 +6,7 @@ import pytest
 
 from creatures import generator
 from creatures.gamedata import BaseBody, bodies_for_skeleton, load_bodies
-from creatures.model import DOG_COMPANION_BRAIN, CreatureDefinition
+from creatures.model import CreatureDefinition
 from creatures.store import CreatureStore
 from mods.project import ModManager
 from runtime_tools.manager import RuntimeManager
@@ -106,9 +106,9 @@ def test_friends_get_the_gaits_the_script_walks_them_with():
     assert "gaits" not in generator.registry_entry("m", wild, BOAR, found)
 
 
-def test_friends_of_henry_think_like_his_dog():
+def test_friends_of_henry_keep_their_body_brain_so_they_still_fight():
     friend = CreatureDefinition("b", "Friendly Boar", "Boar", attitude="companion")
-    assert generator.soul_row("m", friend, BOAR)["brain_id"] == DOG_COMPANION_BRAIN
+    assert generator.soul_row("m", friend, BOAR)["brain_id"] == BOAR.template["brain_id"]
     ally = CreatureDefinition("g", "Guard", "NPC", attitude="ally")
     assert generator.soul_row("m", ally, NPC)["brain_id"] == NPC.template["brain_id"]
 

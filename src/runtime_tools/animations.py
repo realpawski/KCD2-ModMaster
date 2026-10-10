@@ -28,8 +28,8 @@ def _read(files: dict, path: str) -> bytes | None:
         return z.read(hit[1])
 
 
-def animation_names(game: Path, skeleton: str) -> list[str]:
-    files = _game_files(Path(game))
+def animation_names(game: Path, skeleton: str, files: dict | None = None) -> list[str]:
+    files = files if files is not None else _game_files(Path(game))
     params = _read(files, skeleton.rsplit(".", 1)[0] + ".chrparams")
     if not params:
         return []
@@ -59,7 +59,7 @@ def default_animation(names: list[str]) -> str:
 GAITS = (("idle", ("relaxed_idle", "idle")), ("walk", ("relaxed_walk", "walk")),
          ("trot", ("relaxed_trot", "trot", "jog")), ("run", ("relaxed_gallop", "gallop", "run", "sprint")))
 # Transitions, turns and one-sided variants cannot loop while a creature walks straight on.
-NOT_A_LOOP = re.compile(r"_to_|turn|_90_|bwd|start|stop|_l_|_r_|_left|_right|look|eat|sniff|lay|sit|death|hit")
+NOT_A_LOOP = re.compile(r"_to_|turn|_90_|bwd|start|stop|_l_|_r_|_left|_right|look|eat|sniff|lay|sit|death|dead|corpse|hit")
 
 
 def gaits(names: list[str]) -> dict[str, str]:

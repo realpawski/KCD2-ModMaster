@@ -19,10 +19,6 @@ class Attitude:
     brain: str = ""  # a game brain replacing the body's own; empty keeps it
 
 
-# The dog's companion brain keeps a friend from wandering off; the in-game menu walks it after Henry.
-DOG_COMPANION_BRAIN = "4cacb48f-6ebb-71c5-331d-179b9769809b"
-
-
 # Factions decide who a creature treats as friend or enemy; the body's own AI decides how it moves and fights.
 ANIMAL_ATTITUDES = (
     Attitude("wild", "Wild", "Natural instincts of the base animal: prey flees from people, boars defend "
@@ -32,7 +28,7 @@ ANIMAL_ATTITUDES = (
              "guards react when someone harms it.", "animal_home"),
     Attitude("hostile", "Hostile", "Attacks Henry on sight, like the wolves in the game.", "animal_wild_enemy"),
     Attitude("companion", "Friend of Henry", "Follows Henry on its own legs with the body's walk, trot and "
-             "gallop, stays close and stands with him against enemies.", "animalCompanions", DOG_COMPANION_BRAIN),
+             "gallop and stays close. Its own instincts still decide when it fights.", "animalCompanions"),
 )
 
 HUMAN_ATTITUDES = (

@@ -30,6 +30,10 @@ end
 function ModMasterDev:LoadRegistry()
     ModMasterRegistry = nil
     local ok, err = pcall(Script.ReloadScript, "Scripts/ModMaster/registry.lua")
+    -- How each animal body walks; spawning still works without it, the animals just keep standing.
+    ModMasterGaits = nil
+    pcall(Script.ReloadScript, "Scripts/ModMaster/gaits.lua")
+    if type(ModMasterGaits) ~= "table" then ModMasterGaits = nil end
     local data = ModMasterRegistry
     if not ok or type(data) ~= "table" or data.format_version ~= self.registryVersion or
         data.runtime_version ~= self.version or type(data.mods) ~= "table" then
