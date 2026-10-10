@@ -21,7 +21,9 @@ DEFAULT_TARGET = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "KCD2 M
 
 
 def running() -> bool:
-    out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {EXE}", "/NH"], capture_output=True, text=True).stdout
+    # German Windows answers with umlauts in the console code page; the default decoder gave no output at all.
+    out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {EXE}", "/NH"], capture_output=True, text=True,
+                         encoding="oem", errors="replace").stdout or ""
     return EXE.lower() in out.lower()
 
 
