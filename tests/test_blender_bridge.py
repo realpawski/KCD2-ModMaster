@@ -145,3 +145,17 @@ print('TEST_ROUNDTRIP_SUCCESS')
 
     finally:
         mgr.stop_ipc_server()
+
+
+def test_converter_is_found_in_nested_addon_and_extension_folders(tmp_path, monkeypatch):
+    from preview.converter import find_converter_exe
+
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    blender = tmp_path / "Blender Foundation" / "Blender"
+    assert find_converter_exe() is None
+    tool = "io_KCD2_Blender_Toolkit/External/KCD2-Convertor/KCD2-Convertor.exe"
+    for place in ("5.1/extensions/user_default/" + tool,
+                  "5.2/scripts/addons/KCD2-Blender-Toolkit-0.3.2/" + tool):
+        (blender / place).parent.mkdir(parents=True)
+        (blender / place).write_bytes(b"MZ")
+    assert find_converter_exe() == blender / "5.2/scripts/addons/KCD2-Blender-Toolkit-0.3.2" / tool

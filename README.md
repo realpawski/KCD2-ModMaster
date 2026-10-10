@@ -38,7 +38,7 @@ Browse the game's files, create and balance items, and install mods without touc
 - Windows 10 or 11, 64-bit
 - Kingdom Come: Deliverance II (Steam)
 - Optional: [Blender](https://www.blender.org/) 4.2 or newer for the Blender bridge
-- Optional: KCD2 Blender Toolkit for 3D model previews
+- Optional: KCD2 Blender Toolkit by Lune (installed as a Blender add-on) for 3D previews and opening game models in Blender; it brings KCD2-Convertor.exe
 - Optional: KCD2 Modding Tools (free on Steam) to compile your own models
 
 ## Installation

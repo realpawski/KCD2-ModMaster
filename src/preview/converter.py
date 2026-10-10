@@ -30,37 +30,48 @@ from materials.mtl_parser import parse_mtl_xml
 log = logging.getLogger(__name__)
 
 
-def find_converter_exe(settings: Settings | None = None) -> Path | None:
-    """Finds KCD2-Convertor.exe bundled in KCD2 Blender Toolkit or custom path."""
-    candidates = []
+CONVERTER_MISSING = (
+    "KCD2-Convertor.exe not found. It comes with the KCD2 Blender Toolkit add-on by Lune: install it in "
+    "Blender (Edit > Preferences > Add-ons > Install from Disk), then try again. "
+    "Alternatively copy KCD2-Convertor.exe into {tools}."
+)
 
+
+def converter_missing_message(settings: Settings | None = None) -> str:
+    tools = settings.workspace / "tools" if settings else Path("<workspace>/tools")
+    return CONVERTER_MISSING.format(tools=tools)
+
+
+def _blender_roots(settings: Settings | None) -> list[Path]:
+    roots = []
     appdata = os.environ.get("APPDATA", "")
     if appdata:
-        candidates.append(
-            Path(appdata)
-            / "Blender Foundation"
-            / "Blender"
-            / "5.2"
-            / "scripts"
-            / "addons"
-            / "io_KCD2_Blender_Toolkit"
-            / "External"
-            / "KCD2-Convertor"
-            / "KCD2-Convertor.exe"
-        )
-        # Search other Blender versions in APPDATA
-        for p in Path(appdata, "Blender Foundation", "Blender").glob(
-            "*/scripts/addons/io_KCD2_Blender_Toolkit/External/KCD2-Convertor/KCD2-Convertor.exe"
-        ):
-            candidates.append(p)
+        roots.append(Path(appdata, "Blender Foundation", "Blender"))
+    blender = getattr(settings, "blender_exe", "") if settings else ""
+    if blender:
+        # Portable Blender and add-ons installed next to the program live beside blender.exe.
+        roots.append(Path(blender).parent)
+    return roots
 
+
+def find_converter_exe(settings: Settings | None = None) -> Path | None:
+    """KCD2-Convertor.exe from the KCD2 Blender Toolkit, wherever Blender keeps the add-on, or the workspace."""
     if settings:
-        candidates.append(settings.workspace / "tools" / "KCD2-Convertor.exe")
-
-    for c in candidates:
-        if c.is_file():
-            return c
-
+        own = settings.workspace / "tools" / "KCD2-Convertor.exe"
+        if own.is_file():
+            return own
+    # Add-ons sit under scripts/addons; Blender 4.2+ extensions under extensions/<repo>; a zip
+    # installed from GitHub adds one more folder level (KCD2-Blender-Toolkit-0.3.2/io_KCD2_Blender_Toolkit).
+    patterns = ("*/scripts/addons/*/External/KCD2-Convertor/KCD2-Convertor.exe",
+                "*/scripts/addons/*/*/External/KCD2-Convertor/KCD2-Convertor.exe",
+                "*/extensions/*/*/External/KCD2-Convertor/KCD2-Convertor.exe",
+                "*/extensions/*/*/*/External/KCD2-Convertor/KCD2-Convertor.exe")
+    for root in _blender_roots(settings):
+        if not root.is_dir():
+            continue
+        found = sorted((p for pattern in patterns for p in root.glob(pattern) if p.is_file()), reverse=True)
+        if found:
+            return found[0]
     return None
 
 
@@ -186,10 +197,7 @@ def prepare_3d_preview(
     """Prepares or retrieves a converted 3D GLB preview for an asset row with textures."""
     conv_exe = find_converter_exe(settings)
     if not conv_exe:
-        raise PreviewGenerationError(
-            "Could not locate KCD2-Convertor.exe.\n"
-            "Ensure the KCD2 Blender Toolkit is installed in Blender's addons folder."
-        )
+        raise PreviewGenerationError(converter_missing_message(settings))
 
     cache = PreviewCache(settings.workspace)
     hash_key = compute_asset_hash(row.vpath, row.archive_name, row.size)

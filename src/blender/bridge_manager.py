@@ -33,6 +33,7 @@ from database.index import AssetIndex, AssetRow
 from materials.mtl_parser import parse_mtl_xml, resolve_and_stage_textures
 from preview.converter import (
     combine_cryengine_dds,
+    converter_missing_message,
     find_converter_exe,
     prepare_3d_preview,
     resolve_mtl_row,
@@ -571,7 +572,7 @@ class BlenderBridgeManager:
 
         conv_exe = find_converter_exe(self.settings)
         if not conv_exe:
-            raise UserFacingError("KCD2-Convertor.exe not found.")
+            raise UserFacingError(converter_missing_message(self.settings))
 
         cmd = [str(conv_exe), str(target_cgf), "-glb"]
         if mtl_file and mtl_file.is_file():
@@ -670,7 +671,7 @@ class BlenderBridgeManager:
 
         conv_exe = find_converter_exe(self.settings)
         if not conv_exe:
-            raise UserFacingError("KCD2-Convertor.exe not found.")
+            raise UserFacingError(converter_missing_message(self.settings))
         skeleton, parts = self._skinned_parts(src)
         parts_meta: list[dict[str, Any]] = []
         with index.connection(read_only=True) as conn:
