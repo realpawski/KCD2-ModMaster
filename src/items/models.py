@@ -13,7 +13,7 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 ITEM_METADATA_FILENAME = ".modmaster_item.json"
-ITEM_FORMAT_VERSION = 2
+ITEM_FORMAT_VERSION = 3
 
 MODE_NEW = "new"
 MODE_OVERRIDE = "override"
@@ -118,6 +118,8 @@ class GameItemDefinition:
     def from_dict(cls, data: dict[str, Any]) -> GameItemDefinition:
         if "attributes" not in data:
             data = _migrate_v1(data)
+        if int(data.get("format_version") or 1) < 3:
+            data = _migrate_v2(data)
         known = set(cls.__dataclass_fields__)
         return cls(**{k: v for k, v in data.items() if k in known})
 
@@ -173,6 +175,22 @@ def _migrate_v1(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+# Items the game hands out by script arrive in their lowest quality tier, and every value is scaled down from the
+# highest tier: 130 attack at tier I of IV showed as 80. With a single tier, like the game's unique weapons, the
+# lowest tier is the highest, so the values entered in ModMaster are the ones the game uses.
+SINGLE_QUALITY = "1"
+
+
+def _migrate_v2(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    attrs = dict(migrated.get("attributes") or {})
+    if migrated.get("mode", MODE_NEW) == MODE_NEW and "MaxQuality" in attrs:
+        attrs["MaxQuality"] = SINGLE_QUALITY
+    migrated["attributes"] = attrs
+    migrated["format_version"] = ITEM_FORMAT_VERSION
+    return migrated
+
+
 def new_item_from_base(base, item_id: str, display_name: str, description: str = "",
                        mode: str = MODE_NEW) -> GameItemDefinition:
     """Clone every attribute of a vanilla row, as Warhorse recommends for new items."""
@@ -190,6 +208,8 @@ def new_item_from_base(base, item_id: str, display_name: str, description: str =
         )
     if attrs.get("IsQuestItem") == "true":
         attrs["IsQuestItem"] = "false"
+    if "MaxQuality" in attrs:
+        attrs["MaxQuality"] = SINGLE_QUALITY
     return GameItemDefinition(
         item_id=item_id, guid=new_guid(), name=item_id,
         display_name=display_name, description=description or base.info,

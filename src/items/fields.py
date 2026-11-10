@@ -63,7 +63,9 @@ FIELDS: dict[str, FieldInfo] = {
     "StrReq": FieldInfo("Strength", "Requirements"),
     "AgiReq": FieldInfo("Agility", "Requirements"),
     "MaxStatus": FieldInfo("Durability", "Durability", "Maximum condition of the item."),
-    "MaxQuality": FieldInfo("Max quality", "Durability", "Highest quality tier (1-4)."),
+    "MaxQuality": FieldInfo("Max quality", "Durability", "Number of quality tiers (1-4). Keep 1 so the game uses "
+                            "your values exactly; with more tiers, given items arrive at the lowest tier with "
+                            "lower price and damage."),
     "IsBreakable": FieldInfo("Can break", "Durability"),
     "BrokenItemClassId": FieldInfo("Broken item GUID", "Durability", "Item that replaces this one when it breaks."),
     "Price": FieldInfo("Price", "Economy", "Shown in groschen; stored in decigroschen.", scale=10.0, unit="gr"),

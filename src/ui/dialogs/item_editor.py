@@ -353,9 +353,9 @@ class ItemEditorDialog(QDialog):
             grid.addWidget(label("Your model is held like the base item, so keep its grip where the base "
                                  "item's grip is.", "Muted", wrap=True), r, 1, 1, 3)
             r += 1
-        grid.addWidget(label("In game, price and damage scale with the item's quality (I to IV). Items given "
-                             "from the in-game menu arrive at a lower quality, so the game shows less than the "
-                             "values entered here.", "Muted", wrap=True), r, 1, 1, 3)
+        grid.addWidget(label("New items have one quality tier (Max quality 1), so the game uses exactly the values "
+                             "entered here. With more tiers, items from the in-game menu arrive at the lowest tier "
+                             "and the game scales price and damage down.", "Muted", wrap=True), r, 1, 1, 3)
         r += 1
 
         if new_item and self.project_dir is not None:

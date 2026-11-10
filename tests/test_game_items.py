@@ -50,7 +50,7 @@ XSD = """<?xml version="1.0" encoding="UTF-8"?>
 
 ITEMS = """<?xml version="1.0" encoding="us-ascii"?>
 <database name="barbora"><ItemClasses version="8">
-  <MeleeWeapon Attack="141" Class="4" IsBreakable="true" IconId="longswordBroad" IsQuestItem="true"
+  <MeleeWeapon Attack="141" MaxQuality="4" Class="4" IsBreakable="true" IconId="longswordBroad" IsQuestItem="true"
     Model="manmade/weapons/swords_long/long_sword_broad.cgf" Price="28544" Weight="2.9"
     UIName="ui_nm_longsword_broad" UIInfo="ui_in_longsword_broad"
     Id="3858560f-cf48-436f-8815-4426003288fb" Name="longswordBroad" />
@@ -112,6 +112,7 @@ def test_new_item_clones_every_attribute_with_fresh_identity(catalog):
     assert item.guid != base.guid and item.name == "hero_sword"
     assert item.attributes["Model"] == base.attrs["Model"]
     assert item.attributes["IsQuestItem"] == "false"
+    assert item.attributes["MaxQuality"] == "1"
     assert item.ui_name == "ui_nm_hero_sword" and item.description == "A wide blade."
     assert not errors_only(validate_game_item(item, catalog, "my_mod"))
 
@@ -209,7 +210,20 @@ def test_v1_definition_migrates_without_changing_guid(tmp_path):
     assert item.attributes["IsBreakable"] == "true"
     assert item.model_path.endswith("minecraft_sword.cgf") and item.uses_custom_model
     item.save_to_file(path)
-    assert json.loads(path.read_text())["format_version"] == 2
+    assert json.loads(path.read_text())["format_version"] == 3
+
+
+def test_new_items_keep_one_quality_tier_so_the_game_uses_their_values(tmp_path):
+    def stored(mode, quality, version):
+        path = tmp_path / f"{mode}{version}.json"
+        path.write_text(json.dumps({"item_id": "hammer", "guid": "3d8b22ef-a1ad-49ab-a306-07d76aae1049",
+                                    "name": "hammer", "mode": mode, "format_version": version,
+                                    "attributes": {"Attack": "130", "MaxQuality": quality}}))
+        return GameItemDefinition.load_from_file(path)
+
+    assert stored("new", "4", 2).attributes["MaxQuality"] == "1"  # built before: 130 attack showed as 80
+    assert stored("override", "4", 2).attributes["MaxQuality"] == "4"  # game items keep their shop tiers
+    assert stored("new", "4", 3).attributes["MaxQuality"] == "4"  # chosen again on purpose after the fix
 
 
 def test_store_lists_project_and_legacy_asset_items(tmp_path, catalog):
