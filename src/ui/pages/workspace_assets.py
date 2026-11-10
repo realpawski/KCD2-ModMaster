@@ -5,7 +5,7 @@ import logging
 import subprocess
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMenu,
     QMessageBox,
-    QPushButton,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -28,7 +27,7 @@ from ui import theme
 from ui.context import AppContext
 from ui.dialogs.asset_status_dialog import STATUS_TEXT, AssetStatusDialog
 from ui.dialogs.new_asset_wizard import NewAssetWizard
-from ui.widgets import EmptyState, PageHeader, button, configure_table, label, page_layout
+from ui.widgets import PILL_ROLE, EmptyState, PageHeader, PillDelegate, button, configure_table, label, page_layout
 from utils.helpers import reveal_in_explorer
 from workspace.asset_model import (
     AssetStatus,
@@ -41,6 +40,10 @@ from workspace.asset_model import (
 log = logging.getLogger(__name__)
 
 STATUS_COLORS = {"ok": theme.OK, "warn": theme.WARN, "error": theme.ERR, "muted": theme.TEXT_MUTED}
+# The next thing to do for an asset, named after what the user clicks, keyed by the check that asks for it.
+NEXT_STEP = {"workspace": "Folder missing", "blender": "Open in Blender", "export": "Export from Blender",
+             "materials": "Export again", "textures": "Add textures", "mods": "Add to a mod"}
+STATUS_COLUMN = 2
 
 
 class WorkspaceAssetsPage(QWidget):
@@ -85,9 +88,11 @@ class WorkspaceAssetsPage(QWidget):
         lay.addLayout(bar)
 
         self.stack = QStackedWidget()
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Asset", "Type", "Status", "In mods", "Blend file", "Export"])
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Asset", "Type", "Status", "In mods", "Game model"])
         configure_table(self.table, stretch_column=0, row_height=38)
+        self.table.setItemDelegateForColumn(STATUS_COLUMN, PillDelegate(self.table))
+        self.table.cellClicked.connect(self._on_cell_clicked)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
         self.table.doubleClicked.connect(lambda _: self._open_selected_in_blender())
@@ -179,35 +184,35 @@ class WorkspaceAssetsPage(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(a.asset_type))
             self._status_cell(row, a)
             self.table.setItem(row, 3, QTableWidgetItem(", ".join(self.owners.get(a.asset_id, [])) or "—"))
-            has_blend = bool(a.blend_file and Path(a.blend_file).is_file())
-            self.table.setItem(row, 4, QTableWidgetItem("Yes" if has_blend else "No"))
             models = compiled_models(Path(a.workspace_dir))
             if models:
-                export = "Rigged (.skin)" if any(m.lower().endswith(".cdf") for m in models) else "Compiled (.cgf)"
+                export = "Rigged (.skin)" if any(m.lower().endswith(".cdf") for m in models) else "Static (.cgf)"
             elif a.export_file and Path(a.export_file).is_file():
-                export = "GLB only"
+                export = "Preview only (.glb)"
             else:
                 export = "Not exported"
-            self.table.setItem(row, 5, QTableWidgetItem(export))
+            self.table.setItem(row, 4, QTableWidgetItem(export))
         self._set_actions_enabled(False)
 
     def _status_cell(self, row: int, asset: WorkspaceAsset) -> None:
         text, state = STATUS_TEXT.get(asset.status, (asset.status.title(), "muted"))
-        todo = sum(1 for i in self.reports[asset.asset_id].issues if i.severity != "info")
-        pill = QPushButton(f"{text}  ·  {todo} to do" if todo else text)
-        pill.setCursor(Qt.PointingHandCursor)
-        pill.setToolTip("Show what this asset still needs")
-        pill.setStyleSheet(theme.pill(STATUS_COLORS[state]))
-        pill.clicked.connect(lambda _=False, a=asset: self._show_status(a))
-        holder = QWidget()
-        lay = QHBoxLayout(holder)
-        lay.setContentsMargins(8, 0, 8, 0)
-        lay.addWidget(pill)
-        lay.addStretch(1)
-        self.table.setCellWidget(row, 2, holder)
+        todo = [i for i in self.reports[asset.asset_id].issues if i.severity != "info"]
+        if todo:
+            text = ("Problem: " if state == "error" else "Next: ") + NEXT_STEP.get(todo[0].field, text)
+            if len(todo) > 1:
+                text += f"  +{len(todo) - 1}"
         item = QTableWidgetItem()
-        item.setData(Qt.SizeHintRole, QSize(holder.sizeHint().width() + 28, 0))
-        self.table.setItem(row, 2, item)
+        item.setData(PILL_ROLE, (text, state))
+        item.setToolTip("Click to see what this asset still needs" if todo else "Click for details")
+        self.table.setItem(row, STATUS_COLUMN, item)
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        if column != STATUS_COLUMN:
+            return
+        item = self.table.item(row, 0)
+        asset = next((a for a in self.assets if item and a.asset_id == item.data(Qt.UserRole)), None)
+        if asset:
+            self._show_status(asset)
 
     def _show_status(self, asset: WorkspaceAsset) -> None:
         self._select_asset(asset.asset_id)

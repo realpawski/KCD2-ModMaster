@@ -74,15 +74,23 @@ def _stat_summary(item) -> str:
     return "   ".join(parts)
 
 
+def plural(count: int, word: str) -> str:
+    return f"{count} {word}{'s' * (count != 1)}"
+
+
 class ModListEntry(QWidget):
-    def __init__(self, mod: ModProject, item_count: int):
+    def __init__(self, mod: ModProject, item_count: int, creature_count: int = 0):
         super().__init__()
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 9, 12, 9)
         lay.setSpacing(2)
         lay.addWidget(label(mod.name, "H3"))
-        detail = f"{mod.id}  ·  v{mod.version}  ·  {item_count} item{'s' * (item_count != 1)}"
-        lay.addWidget(label(detail, "Muted"))
+        # The folder id only adds information when it reads differently from the name.
+        parts = [mod.id] if mod.id != mod.name.lower().replace(" ", "_") else []
+        parts.append(f"v{mod.version}")
+        contents = [plural(n, w) for n, w in ((item_count, "item"), (creature_count, "creature")) if n]
+        parts.append(", ".join(contents) or "Empty")
+        lay.addWidget(label("  ·  ".join(parts), "Muted"))
 
 
 class ModWorkspace(QWidget):
@@ -118,20 +126,22 @@ class ModWorkspace(QWidget):
         info.addWidget(self.lbl_desc)
         head.addLayout(info, 1)
 
-        self.btn_details = button("Details", "pencil")
-        self.btn_details.clicked.connect(self._edit_details)
-        self.btn_folder = button("Folder", "folder")
-        self.btn_folder.clicked.connect(self._open_folder)
-        self.btn_build = button("Build", "wrench")
-        self.btn_build.clicked.connect(lambda: self._run_build(install=False))
-        self.btn_install = button("Build & install", "arrow-down-tray", "Primary")
+        # One main action, the game next to it, and the rarely needed rest in a menu.
+        self.btn_install = button("Build & install", "arrow-down-tray", "Primary",
+                                  tooltip="Package the mod and copy it into the game's Mods folder")
         self.btn_install.clicked.connect(lambda: self._run_build(install=True))
         self.btn_launch = button("Launch KCD2", "play")
         self.btn_launch.clicked.connect(self._launch)
-        self.btn_delete_mod = button("", "trash", "Danger", tooltip="Delete this mod")
-        self.btn_delete_mod.clicked.connect(self._delete_mod)
-        for b in (self.btn_details, self.btn_folder, self.btn_build, self.btn_install, self.btn_launch,
-                  self.btn_delete_mod):
+        self.btn_more = button("More", tooltip="Edit details, open the folder, build or delete")
+        more = QMenu(self.btn_more)
+        self.act_details = more.addAction("Edit name and description…", self._edit_details)
+        more.addAction("Open mod folder", self._open_folder)
+        self.act_build = more.addAction("Build without installing", lambda: self._run_build(install=False))
+        more.addSeparator()
+        more.addAction("Delete mod…", self._delete_mod)
+        self.btn_more.setMenu(more)
+        self.btn_more.setProperty("hasMenu", True)
+        for b in (self.btn_install, self.btn_launch, self.btn_more):
             head.addWidget(b, 0, Qt.AlignTop)
         lay.addLayout(head)
 
@@ -569,7 +579,7 @@ class ModWorkspace(QWidget):
         self.txt_log.appendPlainText(f"[{time.strftime('%H:%M:%S')}] {text}")
 
     def _set_busy(self, busy: bool) -> None:
-        for b in (self.btn_build, self.btn_install, self.btn_details):
+        for b in (self.act_build, self.btn_install, self.act_details):
             b.setEnabled(not busy)
         if busy:
             self.pill_build.set("Building…", "accent")
@@ -731,9 +741,10 @@ class ModsPage(QWidget):
         selected_row = 0
         for row, mod in enumerate(mods):
             count = len(ModItemStore(mod, self.ctx.settings.workspace).list())
+            creatures = len(CreatureStore(mod).list())
             entry = QListWidgetItem()
             entry.setData(Qt.UserRole, mod.id)
-            widget = ModListEntry(mod, count)
+            widget = ModListEntry(mod, count, creatures)
             entry.setSizeHint(QSize(0, 62))
             self.list_mods.addItem(entry)
             self.list_mods.setItemWidget(entry, widget)

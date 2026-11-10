@@ -18,9 +18,13 @@ from ui import theme
 from ui.context import AppContext
 from ui.icons import get_svg_icon
 
-# (key, label, icon, navigation options); a None key starts a section.
+# (key, label, icon, navigation options); a None key starts a section. Your own work comes first: the
+# game files are where you look things up, the mods are what you came to make.
 NAV_ITEMS = [
     ("home", "Home", "home", {}),
+    (None, "Your work", "", {}),
+    ("mods", "Mods", "puzzle", {}),
+    ("my_assets", "Workspace Assets", "folder", {}),
     (None, "Game files", "", {}),
     ("browser", "Asset Browser", "search", {}),
     ("weapons", "Weapons", "weapon", {"asset_class": "Weapons", "title": "Weapons"}),
@@ -30,9 +34,6 @@ NAV_ITEMS = [
     ("props", "Props", "cube", {"asset_class": "Props", "title": "Props"}),
     ("materials", "Materials", "material", {"type": "MTL", "title": "Materials"}),
     ("textures", "Textures", "photo", {"type": "Textures", "title": "Textures"}),
-    (None, "Create", "", {}),
-    ("mods", "Mods", "puzzle", {}),
-    ("my_assets", "Workspace Assets", "folder", {}),
 ]
 
 WIDTH_EXPANDED = 236
@@ -192,8 +193,6 @@ class SidebarWidget(QFrame):
         for key, item in self.item_map.items():
             item.setText("" if compact else f"  {self._labels[key]}")
         self._update_toggle()
-        self.compact_toggled.emit(compact)
-
-    def auto_collapse_for_3d(self) -> None:
-        if not self._manual_override:
-            self.set_compact(True)
+        # Only a choice the user made is remembered; anything else would bring them back to bare icons.
+        if manual:
+            self.compact_toggled.emit(compact)

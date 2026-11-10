@@ -153,13 +153,15 @@ class BrowserPage(QWidget):
         self.btn_extract_to = QPushButton("Extract to…")
         self.btn_extract_to.setIcon(get_svg_icon("arrow-down-tray", "#e9ebef", 16))
         self.btn_extract_to.clicked.connect(lambda: self._extract(True))
-        self.btn_extract = QPushButton("Extract selected")
+        self.btn_extract = QPushButton("Extract file")
         self.btn_extract.setObjectName("Primary")
         self.btn_extract.setIcon(get_svg_icon("arrow-down-tray", "#16110a", 16))
         self.btn_extract.clicked.connect(lambda: self._extract(False))
 
         actions.addWidget(self.btn_extract_to)
         actions.addWidget(self.btn_extract)
+        self.btn_extract.setEnabled(False)
+        self.btn_extract_to.setEnabled(False)
         left_lay.addLayout(actions)
 
         self.splitter.addWidget(self.left_pane)
@@ -334,7 +336,10 @@ class BrowserPage(QWidget):
         self.preview_container.set_asset(selected)
 
         n = len(rows)
-        self.btn_extract.setText(f"Extract {n} Selected" if n > 1 else "Extract Selected")
+        self.btn_extract.setText(f"Extract {n} files" if n > 1 else "Extract file")
+        # Nothing to extract without a selection, so the main button does not call for a click it cannot answer.
+        self.btn_extract.setEnabled(n > 0)
+        self.btn_extract_to.setEnabled(n > 0)
 
     def _extract(self, choose: bool, companions: bool | None = None) -> None:
         rows = self.selected_rows()

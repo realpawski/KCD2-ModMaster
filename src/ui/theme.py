@@ -14,7 +14,7 @@ BORDER = "#232733"
 BORDER_LIGHT = "#343a48"
 TEXT = "#e9ebef"
 TEXT_DIM = "#a2a8b5"
-TEXT_MUTED = "#6c7383"
+TEXT_MUTED = "#8a91a1"  # 5.0:1 on BG3, the lightest surface; small hint text needs 4.5:1
 ACCENT = "#d6a54e"
 ACCENT_HOVER = "#e3b663"
 ACCENT_PRESSED = "#bf8f3d"
@@ -87,7 +87,7 @@ QLabel#Brand {{
 
 QLabel#BrandSub {{
     color: {TEXT_MUTED};
-    font-size: 7.5pt;
+    font-size: 8.25pt;
     font-weight: 600;
     letter-spacing: 1px;
 }}
@@ -119,7 +119,7 @@ QListWidget#Nav::item:selected {{
 QListWidget#Nav::item:disabled {{
     color: {TEXT_MUTED};
     background: transparent;
-    font-size: 7.5pt;
+    font-size: 8.25pt;
     font-weight: 700;
     letter-spacing: 1px;
     padding: 14px 12px 4px 12px;
@@ -145,7 +145,7 @@ QLabel#H3 {{
 }}
 
 QLabel#Section {{
-    font-size: 7.75pt;
+    font-size: 8.25pt;
     font-weight: 700;
     letter-spacing: 1.2px;
     color: {TEXT_MUTED};
@@ -241,7 +241,7 @@ QGroupBox::title {{
     left: 2px;
     padding: 0 4px 4px 4px;
     color: {TEXT_MUTED};
-    font-size: 7.75pt;
+    font-size: 8.25pt;
     font-weight: 700;
     letter-spacing: 1.2px;
 }}
@@ -455,6 +455,53 @@ QPushButton#Danger:disabled {{
     border-color: {BORDER};
 }}
 
+QSlider::groove:horizontal {{
+    height: 4px;
+    background: {BG4};
+    border-radius: 2px;
+}}
+
+QSlider::sub-page:horizontal {{
+    background: {ACCENT};
+    border-radius: 2px;
+}}
+
+QSlider::handle:horizontal {{
+    background: {TEXT};
+    border: 2px solid {ACCENT};
+    width: 12px;
+    height: 12px;
+    margin: -6px 0;
+    border-radius: 8px;
+}}
+
+QSlider::handle:horizontal:focus {{
+    border-color: {TEXT};
+}}
+
+QPushButton::menu-indicator {{
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 8px;
+}}
+
+QPushButton[hasMenu="true"] {{
+    padding-right: 26px;
+}}
+
+/* Keyboard focus: without it, Tab moves through buttons invisibly. */
+QPushButton:focus, QToolButton:focus {{
+    border-color: {ACCENT};
+}}
+
+QPushButton#Primary:focus {{
+    border-color: {TEXT};
+}}
+
+QCheckBox::indicator:focus, QRadioButton::indicator:focus {{
+    border-color: {ACCENT};
+}}
+
 QFrame#Tile {{
     background: {BG2};
     border: 1px solid {BORDER};
@@ -555,7 +602,7 @@ QHeaderView::section {{
     border: none;
     border-bottom: 1px solid {BORDER};
     padding: 9px 8px;
-    font-size: 7.75pt;
+    font-size: 8.25pt;
     font-weight: 700;
     letter-spacing: 0.8px;
 }}

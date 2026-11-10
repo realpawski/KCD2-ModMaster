@@ -110,10 +110,9 @@ class MainWindow(QMainWindow):
                 pass
 
         # Sidebar compact state initialization & auto-compact connection
-        if self.settings.sidebar_compact:
+        if self.settings.sidebar_collapsed:
             self.sidebar.set_compact(True, manual=True)
-        self.sidebar.compact_toggled.connect(lambda comp: setattr(self.settings, "sidebar_compact", comp))
-        self.ctx.asset_selected.connect(self._on_asset_selected_auto_compact)
+        self.sidebar.compact_toggled.connect(lambda comp: setattr(self.settings, "sidebar_collapsed", comp))
 
         # Wire logging records to console
         self.log_handler.emitter.record.connect(self.console.append)
@@ -140,10 +139,6 @@ class MainWindow(QMainWindow):
         sizes = self.v_splitter.sizes()
         if len(sizes) >= 2 and sizes[1] > 40:
             self.settings.console_splitter_sizes = sizes
-
-    def _on_asset_selected_auto_compact(self, row: AssetRow | None) -> None:
-        if row and row.ext.lower() in ("cgf", "skin", "chr", "cga"):
-            self.sidebar.auto_collapse_for_3d()
 
     def _on_console_collapse_toggled(self, collapsed: bool) -> None:
         sizes = self.v_splitter.sizes()

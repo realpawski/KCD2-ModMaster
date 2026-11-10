@@ -158,11 +158,11 @@ class PreviewContainer(QWidget):
         self.empty_view = QFrame()
         empty_lay = QVBoxLayout(self.empty_view)
         empty_lay.setAlignment(Qt.AlignCenter)
-        lbl_empty = QLabel("Select an asset to preview")
+        lbl_empty = QLabel("Pick a file to preview it")
         lbl_empty.setObjectName("H2")
         lbl_empty.setWordWrap(True)
         lbl_empty_sub = QLabel(
-            "CGF / SKIN meshes render in 3D · DDS textures display in 2D · MTL materials inspect shaders"
+            "Models open in 3D, textures as images, and materials with their texture slots."
         )
         lbl_empty_sub.setObjectName("Dim")
         lbl_empty_sub.setWordWrap(True)

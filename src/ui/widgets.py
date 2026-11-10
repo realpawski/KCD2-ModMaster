@@ -1,8 +1,13 @@
 """Shared building blocks so every page follows the same layout grid."""
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (
+    QApplication,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTableWidgetItem,
     QFrame,
     QHBoxLayout,
@@ -155,6 +160,55 @@ class EmptyState(QWidget):
         self.actions.setAlignment(Qt.AlignCenter)
         lay.addSpacing(6)
         lay.addLayout(self.actions)
+
+
+PILL_ROLE = Qt.UserRole + 20  # (text, state) of a status pill drawn by PillDelegate
+
+
+class PillDelegate(QStyledItemDelegate):
+    """Paints a status pill in a table cell. Painted pills move with their row; cell widgets lagged behind a
+    refill and stacked on top of the first row."""
+
+    PAD_X, MARGIN = 9, 8
+
+    @staticmethod
+    def _font(base: QFont) -> QFont:
+        font = QFont(base)
+        font.setPointSizeF(8.25)
+        font.setWeight(QFont.DemiBold)
+        return font
+
+    def paint(self, painter: QPainter, option, index) -> None:
+        data = index.data(PILL_ROLE)
+        if not data:
+            return super().paint(painter, option, index)
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ""
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        text, state = data
+        color = QColor(StatusPill.COLORS.get(state, theme.TEXT_MUTED))
+        font = self._font(opt.font)
+        metrics = QFontMetrics(font)
+        height = metrics.height() + 6
+        width = metrics.horizontalAdvance(text) + 2 * self.PAD_X
+        rect = QRectF(opt.rect.x() + self.MARGIN, opt.rect.center().y() - height / 2 + 0.5, width, height)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(color, 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(rect, height / 2, height / 2)
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignCenter, text)
+        painter.restore()
+
+    def sizeHint(self, option, index) -> QSize:
+        data = index.data(PILL_ROLE)
+        if not data:
+            return super().sizeHint(option, index)
+        metrics = QFontMetrics(self._font(option.font))
+        return QSize(metrics.horizontalAdvance(data[0]) + 2 * (self.PAD_X + self.MARGIN) + 4, metrics.height() + 10)
 
 
 def set_cell_pill(table, row: int, column: int, text: str, state: str = "muted") -> None:

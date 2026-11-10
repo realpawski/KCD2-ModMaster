@@ -92,9 +92,9 @@ class InspectorWidget(QScrollArea):
         b_lay.setSpacing(8)
 
         b_header = QHBoxLayout()
-        b_title = QLabel("BLENDER INTEGRATION")
+        b_title = QLabel("BLENDER")
         b_title.setStyleSheet("font-size: 8.5pt; font-weight: 700; letter-spacing: 0.8px; color: #e9ebef;")
-        self.lbl_bridge_conn = QLabel("OFFLINE")
+        self.lbl_bridge_conn = QLabel("Not connected")
         self.lbl_bridge_conn.setObjectName("Badge")
         b_header.addWidget(b_title)
         b_header.addStretch(1)
@@ -102,7 +102,7 @@ class InspectorWidget(QScrollArea):
         b_lay.addLayout(b_header)
 
         # Status and working copy info
-        self.lbl_working_status = QLabel("SOURCE: Vanilla / Read Only")
+        self.lbl_working_status = QLabel("Game file, read-only")
         self.lbl_working_status.setStyleSheet("font-weight: 600; font-size: 9pt; color: #a2a8b5;")
         self.lbl_workspace_folder = QLabel("Workspace: None")
         self.lbl_workspace_folder.setObjectName("Dim")
@@ -110,7 +110,7 @@ class InspectorWidget(QScrollArea):
         b_lay.addWidget(self.lbl_working_status)
         b_lay.addWidget(self.lbl_workspace_folder)
 
-        self.btn_open_blender = QPushButton("OPEN IN BLENDER")
+        self.btn_open_blender = QPushButton("Open in Blender")
         self.btn_open_blender.setObjectName("Primary")
         self.btn_open_blender.setIcon(get_svg_icon("blender", "#16110a", 18))
         self.btn_open_blender.setMinimumHeight(36)
@@ -139,7 +139,7 @@ class InspectorWidget(QScrollArea):
         self.btn_sync_textures.setToolTip("Export and sync referenced DDS textures to Blender workspace")
         self.btn_sync_textures.clicked.connect(self._sync_textures)
 
-        self.btn_rebuild_materials = QPushButton("Rebuild Mat")
+        self.btn_rebuild_materials = QPushButton("Rebuild Materials")
         self.btn_rebuild_materials.setIcon(get_svg_icon("sparkles", "#e9ebef", 14))
         self.btn_rebuild_materials.setToolTip("Rebuild Blender shader node trees cleanly without touching mesh")
         self.btn_rebuild_materials.clicked.connect(self._rebuild_materials)
@@ -161,14 +161,8 @@ class InspectorWidget(QScrollArea):
         self.btn_validate.setStyleSheet("padding: 4px 6px; font-size: 8.5pt;")
         self.btn_validate.clicked.connect(self._validate_export)
 
-        self.btn_build = QPushButton("Build")
-        self.btn_build.setIcon(get_svg_icon("wrench", "#e9ebef", 14))
-        self.btn_build.setStyleSheet("padding: 4px 6px; font-size: 8.5pt;")
-        self.btn_build.setEnabled(False)  # Milestone 3 packaging
-
         pipe_row.addWidget(self.btn_compare)
         pipe_row.addWidget(self.btn_validate)
-        pipe_row.addWidget(self.btn_build)
         b_lay.addLayout(pipe_row)
 
         lay.addWidget(self.bridge_card)
@@ -176,6 +170,7 @@ class InspectorWidget(QScrollArea):
         # File Metadata Details
         card = QFrame()
         card.setObjectName("Card")
+        self.details_card = card
         self.form = QFormLayout(card)
         self.form.setContentsMargins(12, 10, 12, 10)
         self.form.setLabelAlignment(Qt.AlignLeft)
@@ -202,7 +197,9 @@ class InspectorWidget(QScrollArea):
         lay.addWidget(self.refs)
 
         # Extract & Explorer Tools
-        btns = QVBoxLayout()
+        self.tools = QWidget()
+        btns = QVBoxLayout(self.tools)
+        btns.setContentsMargins(0, 0, 0, 0)
         self.btn_extract = QPushButton("Extract to Workspace")
         self.btn_extract.setIcon(get_svg_icon("arrow-down-tray", "#e9ebef", 16))
         self.btn_extract.clicked.connect(lambda: self._extract(False))
@@ -225,7 +222,7 @@ class InspectorWidget(QScrollArea):
         btns.addWidget(self.btn_extract)
         btns.addWidget(self.btn_extract_to)
         btns.addLayout(row2)
-        lay.addLayout(btns)
+        lay.addWidget(self.tools)
         lay.addStretch(1)
 
         # Wire Signals
@@ -241,15 +238,15 @@ class InspectorWidget(QScrollArea):
     # Bridge UI Updates
     def _on_bridge_conn_changed(self, connected: bool) -> None:
         if connected:
-            self.lbl_bridge_conn.setText("CONNECTED ✓")
-            self.lbl_bridge_conn.setStyleSheet("background: #d6a54e; color: #16110a; font-weight: 700; border-radius: 9px; padding: 2px 8px; font-size: 8pt;")
+            self.lbl_bridge_conn.setText("Connected")
+            self.lbl_bridge_conn.setStyleSheet(theme.pill(theme.OK))
         else:
-            self.lbl_bridge_conn.setText("OFFLINE")
-            self.lbl_bridge_conn.setStyleSheet("background: #1e222c; color: #a2a8b5; border: 1px solid #343a48; border-radius: 9px; padding: 2px 8px; font-size: 8pt;")
+            self.lbl_bridge_conn.setText("Not connected")
+            self.lbl_bridge_conn.setStyleSheet(theme.pill(theme.TEXT_MUTED))
 
     def _on_asset_exported(self, asset_id: str, asset_name: str, export_path: str) -> None:
         if self.row and (asset_name in self.row.filename or asset_id.startswith(Path(self.row.filename).stem)):
-            self.lbl_working_status.setText("MODIFIED IN BLENDER")
+            self.lbl_working_status.setText("Changed in Blender")
             self.lbl_working_status.setStyleSheet("font-weight: 700; font-size: 9.5pt; color: #e9ebef;")
             self.btn_compare.setEnabled(True)
             self.btn_validate.setEnabled(True)
@@ -270,23 +267,23 @@ class InspectorWidget(QScrollArea):
         export_file = ws_root / "export" / f"{slug}_exported.glb"
 
         if export_file.is_file():
-            self.lbl_working_status.setText("MODIFIED IN BLENDER")
+            self.lbl_working_status.setText("Changed in Blender")
             self.lbl_working_status.setStyleSheet("font-weight: 700; font-size: 9.5pt; color: #e9ebef;")
             self.lbl_workspace_folder.setText(_wrap_path(f"Export: {export_file.name}"))
             self.lbl_workspace_folder.setToolTip(str(export_file))
             self.btn_compare.setEnabled(True)
             self.btn_validate.setEnabled(True)
         elif meta_file.is_file():
-            self.lbl_working_status.setText(f"WORKING COPY: Editable ({slug})")
+            self.lbl_working_status.setText(f"Editable copy: {slug}")
             self.lbl_working_status.setStyleSheet("font-weight: 600; font-size: 9pt; color: #e9ebef;")
             self.lbl_workspace_folder.setText(_wrap_path(f"Workspace: Assets/{slug}"))
             self.lbl_workspace_folder.setToolTip(str(ws_root))
             self.btn_compare.setEnabled(False)
             self.btn_validate.setEnabled(False)
         else:
-            self.lbl_working_status.setText("SOURCE: Vanilla / Read Only")
+            self.lbl_working_status.setText("Game file, read-only")
             self.lbl_working_status.setStyleSheet("font-weight: 500; font-size: 9pt; color: #a2a8b5;")
-            self.lbl_workspace_folder.setText("Workspace: Not created yet")
+            self.lbl_workspace_folder.setText("Open it in Blender to get an editable copy in your workspace.")
             self.lbl_workspace_folder.setToolTip("")
             self.btn_compare.setEnabled(False)
             self.btn_validate.setEnabled(False)
@@ -385,9 +382,12 @@ class InspectorWidget(QScrollArea):
         self.refs_title.setVisible(False)
         self.refs.setVisible(False)
 
+        # Without a selection there is nothing to act on, so only the hint shows instead of empty rows.
+        for part in (self.bridge_card, self.details_card, self.tools):
+            part.setVisible(row is not None)
         if row is None:
             self.title.setText("No asset selected")
-            self.subtitle.setText("Select an asset in the browser to inspect it.")
+            self.subtitle.setText("Pick a file in the list to see where it lives, preview it and open it in Blender.")
             for v in self.f.values():
                 v.setText("—")
             self.btn_reveal.setEnabled(False)
@@ -448,7 +448,7 @@ class InspectorWidget(QScrollArea):
                     it.setIcon(get_svg_icon("check-circle", "#e9ebef", 14))
                     it.setForeground(Qt.GlobalColor.white)
                 else:
-                    it.setIcon(get_svg_icon("x-circle", "#6c7383", 14))
+                    it.setIcon(get_svg_icon("x-circle", theme.TEXT_MUTED, 14))
                     it.setForeground(Qt.GlobalColor.gray)
                 it.setData(Qt.UserRole, found)
                 self.refs.addItem(it)

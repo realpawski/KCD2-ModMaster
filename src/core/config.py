@@ -37,7 +37,8 @@ class Settings:
     window_geometry: str = ""
     browser_splitter_sizes: list[int] = field(default_factory=lambda: [520, 1000, 360])
     console_splitter_sizes: list[int] = field(default_factory=lambda: [720, 160])
-    sidebar_compact: bool = False
+    # Renamed from sidebar_compact, which also stored automatic collapses and left people with bare icons.
+    sidebar_collapsed: bool = False
     console_collapsed: bool = True
     default_author: str = ""
     check_updates_on_start: bool = True
